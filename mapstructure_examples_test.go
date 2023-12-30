@@ -2,6 +2,7 @@ package mapstructure
 
 import (
 	"fmt"
+	"strconv"
 )
 
 func ExampleDecode() {
@@ -288,4 +289,38 @@ func ExampleDecode_omitempty() {
 	fmt.Printf("%+v", result)
 	// Output:
 	// &map[Age:0 FirstName:Somebody]
+}
+
+type CustomUnmarshaler struct {
+	ID int64
+}
+
+func (c *CustomUnmarshaler) UnmarshalMapStructure(v interface{}) error {
+	if sid, ok := v.(string); ok {
+		id, err := strconv.ParseInt(sid, 10, 64)
+		if err != nil {
+			return fmt.Errorf("error converting id to int, %v", err)
+		}
+		c.ID = id
+		return nil
+
+	}
+	return fmt.Errorf("error unmarshaling")
+}
+
+func ExampleDecode_structImplementsUnmarshalerInterface() {
+	type Custom struct {
+		Unmarshalers []CustomUnmarshaler
+	}
+	input := map[string]interface{}{
+		"unmarshalers": []string{"123456"},
+	}
+	var result Custom
+	err := Decode(input, &result)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("%#v", result)
+	// Output:
+	// mapstructure.Custom{Unmarshalers:[]mapstructure.CustomUnmarshaler{mapstructure.CustomUnmarshaler{ID:123456}}}
 }
