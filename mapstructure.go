@@ -301,6 +301,10 @@ type Metadata struct {
 	Unset []string
 }
 
+type Unmarshaler interface {
+	UnmarshalMapStructure(interface{}) error
+}
+
 // Decode takes an input structure and uses reflection to translate it to
 // the output structure. output must be a pointer to a map or struct.
 func Decode(input interface{}, output interface{}) error {
@@ -451,6 +455,12 @@ func (d *Decoder) decode(name string, input interface{}, outVal reflect.Value) e
 			d.config.Metadata.Keys = append(d.config.Metadata.Keys, name)
 		}
 		return nil
+	}
+
+	if outVal.CanAddr() {
+		if v, ok := outVal.Addr().Interface().(Unmarshaler); ok {
+			return v.UnmarshalMapStructure(input)
+		}
 	}
 
 	if d.config.DecodeHook != nil {
