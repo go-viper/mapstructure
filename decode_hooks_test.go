@@ -561,6 +561,30 @@ func TestStructToMapHookFuncTabled(t *testing.T) {
 	}
 }
 
+func TestTextMarshallerHookFunc(t *testing.T) {
+	cases := []struct {
+		f, t   reflect.Value
+		result interface{}
+	}{
+		{reflect.ValueOf("42"), reflect.ValueOf(""), "42"},
+		{reflect.ValueOf(big.NewInt(42)), reflect.ValueOf(""), "42"},
+		{reflect.ValueOf(json.Number("42")), reflect.ValueOf(""), "42"},
+		{reflect.ValueOf(42), reflect.ValueOf(0), 42},
+	}
+	for i, tc := range cases {
+		f := TextMarshallerHookFunc()
+		actual, err := DecodeHookExec(f, tc.f, tc.t)
+		if err != nil {
+			t.Fatalf("case %d: unexpected err %#v", i, err)
+		}
+		if !reflect.DeepEqual(actual, tc.result) {
+			t.Fatalf(
+				"case %d: expected %#v, got %#v",
+				i, tc.result, actual)
+		}
+	}
+}
+
 func TestTextUnmarshallerHookFunc(t *testing.T) {
 	type MyString string
 

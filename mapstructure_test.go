@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math/big"
 	"reflect"
 	"sort"
 	"strings"
@@ -2674,6 +2675,36 @@ func TestDecode_StructTaggedWithOmitempty_KeepNonEmptyValues(t *testing.T) {
 
 	if !reflect.DeepEqual(actual, expected) {
 		t.Fatalf("Decode() expected: %#v, got: %#v", expected, actual)
+	}
+}
+
+func TestDecode_structToMapWithDecodeHook(t *testing.T) {
+	type From struct {
+		Value *big.Int
+	}
+
+	expected := map[string]string{
+		"Value": "42",
+	}
+
+	target := map[string]string{}
+	decoder, err := NewDecoder(&DecoderConfig{
+		Result:     &target,
+		DecodeHook: TextMarshallerHookFunc(),
+	})
+	if err != nil {
+		t.Fatalf("got error: %s", err)
+	}
+
+	err = decoder.Decode(&From{
+		Value: big.NewInt(42),
+	})
+	if err != nil {
+		t.Fatalf("got error: %s", err)
+	}
+
+	if !reflect.DeepEqual(target, expected) {
+		t.Fatalf("bad: %#v", target)
 	}
 }
 
