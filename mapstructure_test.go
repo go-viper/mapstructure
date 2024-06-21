@@ -5,9 +5,9 @@ import (
 	"errors"
 	"io"
 	"math/big"
+	"net/netip"
 	"reflect"
 	"sort"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -231,14 +231,6 @@ type TypeConversionResult struct {
 	MapToSlice         []interface{}
 	ArrayToMap         map[string]interface{}
 	MapToArray         [1]interface{}
-}
-
-type Marshalable struct {
-	Int int
-}
-
-func (m Marshalable) MarshalText() ([]byte, error) {
-	return []byte(strconv.Itoa(m.Int)), nil
 }
 
 func TestBasicTypes(t *testing.T) {
@@ -2697,13 +2689,13 @@ func TestDecode_structToMapWithDecodeHook(t *testing.T) {
 	type From struct {
 		*Embedded `mapstructure:",squash"`
 		Bar       *big.Int
-		Baz       Marshalable
+		Baz       netip.Addr
 	}
 
 	expected := map[string]string{
 		"Foo": "1729",
 		"Bar": "42",
-		"Baz": "63",
+		"Baz": "::1",
 	}
 
 	target := map[string]string{}
@@ -2718,7 +2710,7 @@ func TestDecode_structToMapWithDecodeHook(t *testing.T) {
 	err = decoder.Decode(&From{
 		Embedded: &Embedded{Foo: big.NewInt(1729)},
 		Bar:      big.NewInt(42),
-		Baz:      Marshalable{Int: 63},
+		Baz:      netip.IPv6Loopback(),
 	})
 	if err != nil {
 		t.Fatalf("got error: %s", err)
