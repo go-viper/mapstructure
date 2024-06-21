@@ -1013,6 +1013,16 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 			vType := valMap.Type()
 			vKeyType := vType.Key()
 			vElemType := vType.Elem()
+
+			// Is it possible to directly convert the struct to the field type?
+			if vElemType.Kind() != reflect.Interface {
+				fieldVal := reflect.New(vElemType).Elem()
+				if err := d.decode(keyName, v.Interface(), fieldVal); err == nil {
+					valMap.SetMapIndex(reflect.ValueOf(keyName), fieldVal)
+					continue
+				}
+			}
+
 			mType := reflect.MapOf(vKeyType, vElemType)
 			vMap := reflect.MakeMap(mType)
 
@@ -1034,9 +1044,17 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 
 			if squash {
 				for _, k := range vMap.MapKeys() {
+					if !vMap.MapIndex(k).Type().AssignableTo(valMap.Type().Elem()) {
+						return fmt.Errorf("cannot assign type '%s' to map value field of type '%s'", vMap.MapIndex(k).Type(), valMap.Type().Elem())
+					}
+
 					valMap.SetMapIndex(k, vMap.MapIndex(k))
 				}
 			} else {
+				if !vMap.Type().AssignableTo(valMap.Type().Elem()) {
+					return fmt.Errorf("cannot assign type '%s' to map value field of type '%s'", vMap.Type(), valMap.Type().Elem())
+				}
+
 				valMap.SetMapIndex(reflect.ValueOf(keyName), vMap)
 			}
 

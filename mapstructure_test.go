@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -230,6 +231,14 @@ type TypeConversionResult struct {
 	MapToSlice         []interface{}
 	ArrayToMap         map[string]interface{}
 	MapToArray         [1]interface{}
+}
+
+type Marshalable struct {
+	Int int
+}
+
+func (m Marshalable) MarshalText() ([]byte, error) {
+	return []byte(strconv.Itoa(m.Int)), nil
 }
 
 func TestBasicTypes(t *testing.T) {
@@ -2679,12 +2688,22 @@ func TestDecode_StructTaggedWithOmitempty_KeepNonEmptyValues(t *testing.T) {
 }
 
 func TestDecode_structToMapWithDecodeHook(t *testing.T) {
+	t.Parallel()
+
+	type Embedded struct {
+		Foo *big.Int
+	}
+
 	type From struct {
-		Value *big.Int
+		*Embedded `mapstructure:",squash"`
+		Bar       *big.Int
+		Baz       Marshalable
 	}
 
 	expected := map[string]string{
-		"Value": "42",
+		"Foo": "1729",
+		"Bar": "42",
+		"Baz": "63",
 	}
 
 	target := map[string]string{}
@@ -2697,7 +2716,9 @@ func TestDecode_structToMapWithDecodeHook(t *testing.T) {
 	}
 
 	err = decoder.Decode(&From{
-		Value: big.NewInt(42),
+		Embedded: &Embedded{Foo: big.NewInt(1729)},
+		Bar:      big.NewInt(42),
+		Baz:      Marshalable{Int: 63},
 	})
 	if err != nil {
 		t.Fatalf("got error: %s", err)
