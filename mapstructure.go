@@ -960,12 +960,14 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 		v = dereferencePtrToStructIfNeeded(v, d.config.TagName)
 
 		// Determine the name of the key in the map
+		var omitEmpty bool
 		if index := strings.Index(tagValue, ","); index != -1 {
 			if tagValue[:index] == "-" {
 				continue
 			}
 			// If "omitempty" is specified in the tag, it ignores empty values.
-			if strings.Index(tagValue[index+1:], "omitempty") != -1 && isEmptyValue(v) {
+			omitEmpty = strings.Index(tagValue[index+1:], "omitempty") != -1
+			if omitEmpty && isEmptyValue(v) {
 				continue
 			}
 
@@ -1018,7 +1020,9 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 			if vElemType.Kind() != reflect.Interface {
 				fieldVal := reflect.New(vElemType).Elem()
 				if err := d.decode(keyName, v.Interface(), fieldVal); err == nil {
-					valMap.SetMapIndex(reflect.ValueOf(keyName), fieldVal)
+					if !omitEmpty || !isEmptyValue(fieldVal) {
+						valMap.SetMapIndex(reflect.ValueOf(keyName), fieldVal)
+					}
 					continue
 				}
 			}
@@ -1068,7 +1072,10 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 				if err := d.decode(keyName, v.Interface(), fieldVal); err != nil {
 					return err
 				}
-				valMap.SetMapIndex(reflect.ValueOf(keyName), fieldVal)
+
+				if !omitEmpty || !isEmptyValue(fieldVal) {
+					valMap.SetMapIndex(reflect.ValueOf(keyName), fieldVal)
+				}
 			}
 		}
 	}
