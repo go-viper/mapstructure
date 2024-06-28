@@ -283,7 +283,8 @@ type DecoderConfig struct {
 // structure. The top-level Decode method is just a convenience that sets
 // up the most basic Decoder.
 type Decoder struct {
-	config *DecoderConfig
+	config           *DecoderConfig
+	cachedDecodeHook func(from reflect.Value, to reflect.Value) (interface{}, error)
 }
 
 // Metadata contains information about decoding a structure that
@@ -408,6 +409,9 @@ func NewDecoder(config *DecoderConfig) (*Decoder, error) {
 	result := &Decoder{
 		config: config,
 	}
+	if config.DecodeHook != nil {
+		result.cachedDecodeHook = cachedDecodeHook(config.DecodeHook)
+	}
 
 	return result, nil
 }
@@ -462,10 +466,10 @@ func (d *Decoder) decode(name string, input interface{}, outVal reflect.Value) e
 		return nil
 	}
 
-	if d.config.DecodeHook != nil {
+	if d.cachedDecodeHook != nil {
 		// We have a DecodeHook, so let's pre-process the input.
 		var err error
-		input, err = DecodeHookExec(d.config.DecodeHook, inputVal, outVal)
+		input, err = d.cachedDecodeHook(inputVal, outVal)
 		if err != nil {
 			return fmt.Errorf("error decoding '%s': %w", name, err)
 		}
