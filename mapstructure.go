@@ -428,50 +428,11 @@ func (d *Decoder) Decode(input interface{}) error {
 
 // Decodes an unknown data type into a specific reflection value.
 func (d *Decoder) decode(name string, input interface{}, outVal reflect.Value) error {
-	var inputVal reflect.Value
-	if input != nil {
-		inputVal = reflect.ValueOf(input)
-
-		// We need to check here if input is a typed nil. Typed nils won't
-		// match the "input == nil" below so we check that here.
-		if inputVal.Kind() == reflect.Ptr && inputVal.IsNil() {
-			input = nil
-		}
+	input, err := d.parseInput(name, input, outVal)
+	if err != nil {
+		return err
 	}
 
-	if input == nil {
-		// If the data is nil, then we don't set anything, unless ZeroFields is set
-		// to true.
-		if d.config.ZeroFields {
-			outVal.Set(reflect.Zero(outVal.Type()))
-
-			if d.config.Metadata != nil && name != "" {
-				d.config.Metadata.Keys = append(d.config.Metadata.Keys, name)
-			}
-		}
-		return nil
-	}
-
-	if !inputVal.IsValid() {
-		// If the input value is invalid, then we just set the value
-		// to be the zero value.
-		outVal.Set(reflect.Zero(outVal.Type()))
-		if d.config.Metadata != nil && name != "" {
-			d.config.Metadata.Keys = append(d.config.Metadata.Keys, name)
-		}
-		return nil
-	}
-
-	if d.config.DecodeHook != nil {
-		// We have a DecodeHook, so let's pre-process the input.
-		var err error
-		input, err = DecodeHookExec(d.config.DecodeHook, inputVal, outVal)
-		if err != nil {
-			return fmt.Errorf("error decoding '%s': %w", name, err)
-		}
-	}
-
-	var err error
 	outputKind := getKind(outVal)
 	addMetaKey := true
 	switch outputKind {
@@ -513,6 +474,52 @@ func (d *Decoder) decode(name string, input interface{}, outVal reflect.Value) e
 	}
 
 	return err
+}
+
+func (d *Decoder) parseInput(name string, input any, outVal reflect.Value) (_ any, err error) {
+	var inputVal reflect.Value
+	if input != nil {
+		inputVal = reflect.ValueOf(input)
+
+		// We need to check here if input is a typed nil. Typed nils won't
+		// match the "input == nil" below so we check that here.
+		if inputVal.Kind() == reflect.Ptr && inputVal.IsNil() {
+			input = nil
+		}
+	}
+
+	if input == nil {
+		// If the data is nil, then we don't set anything, unless ZeroFields is set
+		// to true.
+		if d.config.ZeroFields {
+			outVal.Set(reflect.Zero(outVal.Type()))
+
+			if d.config.Metadata != nil && name != "" {
+				d.config.Metadata.Keys = append(d.config.Metadata.Keys, name)
+			}
+		}
+		return
+	}
+
+	if !inputVal.IsValid() {
+		// If the input value is invalid, then we just set the value
+		// to be the zero value.
+		outVal.Set(reflect.Zero(outVal.Type()))
+		if d.config.Metadata != nil && name != "" {
+			d.config.Metadata.Keys = append(d.config.Metadata.Keys, name)
+		}
+		return
+	}
+
+	if d.config.DecodeHook != nil {
+		// We have a DecodeHook, so let's pre-process the input.
+		input, err = DecodeHookExec(d.config.DecodeHook, inputVal, outVal)
+		if err != nil {
+			err = fmt.Errorf("error decoding '%s': %w", name, err)
+		}
+	}
+
+	return input, err
 }
 
 // This decodes a basic type (bool, int, string, etc.) and sets the
@@ -1026,7 +1033,24 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 			addrVal := reflect.New(vMap.Type())
 			reflect.Indirect(addrVal).Set(vMap)
 
-			err := d.decode(keyName, x.Interface(), reflect.Indirect(addrVal))
+			// ---------- Start
+			// Allows custom values of hooks to be entered into a map
+			input, err := d.parseInput(name, x.Interface(), reflect.Indirect(addrVal))
+			if err != nil {
+				return err
+			}
+
+			inputVal := reflect.ValueOf(input)
+			if inputVal.Kind() == reflect.Ptr {
+				inputVal = inputVal.Elem()
+			}
+			if inputVal.Kind() != reflect.Struct {
+				valMap.SetMapIndex(reflect.ValueOf(keyName), inputVal)
+				continue
+			}
+			// End ------------
+
+			err = d.decode(keyName, x.Interface(), reflect.Indirect(addrVal))
 			if err != nil {
 				return err
 			}

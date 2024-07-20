@@ -3,6 +3,7 @@ package mapstructure
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"net"
 	"net/netip"
@@ -11,6 +12,65 @@ import (
 	"testing"
 	"time"
 )
+
+func TestDecodeMap1(t *testing.T) {
+	type Message struct {
+		Time    time.Time `json:"time"`
+		Content string    `json:"content"`
+	}
+
+	result := map[string]any{}
+	dec, _ := NewDecoder(&DecoderConfig{
+		DecodeHook: func(f reflect.Type, t reflect.Type, value any) (data any, err error) {
+			// 在解码钩子中改变 map 的输出结果
+			if f == reflect.TypeOf(&time.Time{}) {
+				msgTime := value.(*time.Time)
+				return msgTime.Format(time.DateTime), nil
+			}
+			return value, nil
+		},
+		Result:  &result,
+		TagName: "json",
+	})
+
+	m := Message{Time: time.Now(), Content: "sss"}
+	_ = dec.Decode(&m)
+
+	fmt.Printf("TestDecodeMap1: %#v\n", result)
+}
+
+func TestDecodeMap2(t *testing.T) {
+	type Person struct {
+		Name string `json:"name"`
+		Age  int    `json:"age"`
+	}
+
+	type Message struct {
+		Time    time.Time `json:"time"`
+		Content string    `json:"content"`
+		Person  Person    `json:"person"`
+	}
+
+	result := map[string]any{}
+	dec, _ := NewDecoder(&DecoderConfig{
+		DecodeHook: func(f reflect.Type, t reflect.Type, value any) (data any, err error) {
+			// 在解码钩子中改变 map 的输出结果
+			if f == reflect.TypeOf(&Person{}) {
+				return value.(*Person).Name, nil
+			}
+			return value, nil
+		},
+		Result:  &result,
+		TagName: "json",
+	})
+
+	m := Message{Time: time.Now(), Content: "sss", Person: Person{Name: "testName", Age: 20}}
+	if err := dec.Decode(&m); err != nil {
+		t.Fatalf("bad: %s", err)
+	}
+
+	fmt.Printf("TestDecodeMap2: %#v\n", result)
+}
 
 func TestComposeDecodeHookFunc(t *testing.T) {
 	f1 := func(
