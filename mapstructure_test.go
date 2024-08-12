@@ -2,6 +2,7 @@ package mapstructure
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"reflect"
 	"sort"
@@ -48,6 +49,10 @@ type BasicPointer struct {
 
 type BasicSquash struct {
 	Test Basic `mapstructure:",squash"`
+}
+
+type BasicJSONInline struct {
+	Test Basic `json:",inline"`
 }
 
 type Embedded struct {
@@ -527,6 +532,62 @@ func TestDecodeFrom_BasicSquash(t *testing.T) {
 	var result map[string]interface{}
 	err := Decode(input, &result)
 	if err != nil {
+		t.Fatalf("got an err: %s", err.Error())
+	}
+
+	if _, ok = result["Test"]; ok {
+		t.Error("test should not be present in map")
+	}
+
+	v, ok = result["Vstring"]
+	if !ok {
+		t.Error("vstring should be present in map")
+	} else if !reflect.DeepEqual(v, "foo") {
+		t.Errorf("vstring value should be 'foo': %#v", v)
+	}
+}
+
+func TestDecode_BasicJSONInline(t *testing.T) {
+	t.Parallel()
+
+	input := map[string]interface{}{
+		"vstring": "foo",
+	}
+
+	var result BasicJSONInline
+	d, err := NewDecoder(&DecoderConfig{TagName: "json", SquashTagOption: "inline", Result: &result})
+	if err != nil {
+		t.Fatalf("got an err: %s", err.Error())
+	}
+
+	if err := d.Decode(input); err != nil {
+		t.Fatalf("got an err: %s", err.Error())
+	}
+
+	if result.Test.Vstring != "foo" {
+		t.Errorf("vstring value should be 'foo': %#v", result.Test.Vstring)
+	}
+}
+
+func TestDecodeFrom_BasicJSONInline(t *testing.T) {
+	t.Parallel()
+
+	var v interface{}
+	var ok bool
+
+	input := BasicJSONInline{
+		Test: Basic{
+			Vstring: "foo",
+		},
+	}
+
+	var result map[string]interface{}
+	d, err := NewDecoder(&DecoderConfig{TagName: "json", SquashTagOption: "inline", Result: &result})
+	if err != nil {
+		t.Fatalf("got an err: %s", err.Error())
+	}
+
+	if err := d.Decode(input); err != nil {
 		t.Fatalf("got an err: %s", err.Error())
 	}
 
@@ -2518,13 +2579,17 @@ func TestInvalidType(t *testing.T) {
 		t.Fatal("error should exist")
 	}
 
-	derr, ok := err.(*Error)
-	if !ok {
-		t.Fatalf("error should be kind of Error, instead: %#v", err)
+	var derr interface {
+		Unwrap() []error
 	}
 
-	if derr.Errors[0] !=
-		"'Vstring' expected type 'string', got unconvertible type 'int', value: '42'" {
+	if !errors.As(err, &derr) {
+		t.Fatalf("error should be a type implementing Unwrap() []error, instead: %#v", err)
+	}
+
+	errs := derr.Unwrap()
+
+	if errs[0].Error() != "'Vstring' expected type 'string', got unconvertible type 'int', value: '42'" {
 		t.Errorf("got unexpected error: %s", err)
 	}
 
@@ -2537,12 +2602,13 @@ func TestInvalidType(t *testing.T) {
 		t.Fatal("error should exist")
 	}
 
-	derr, ok = err.(*Error)
-	if !ok {
-		t.Fatalf("error should be kind of Error, instead: %#v", err)
+	if !errors.As(err, &derr) {
+		t.Fatalf("error should be a type implementing Unwrap() []error, instead: %#v", err)
 	}
 
-	if derr.Errors[0] != "cannot parse 'Vuint', -42 overflows uint" {
+	errs = derr.Unwrap()
+
+	if errs[0].Error() != "cannot parse 'Vuint', -42 overflows uint" {
 		t.Errorf("got unexpected error: %s", err)
 	}
 
@@ -2555,12 +2621,13 @@ func TestInvalidType(t *testing.T) {
 		t.Fatal("error should exist")
 	}
 
-	derr, ok = err.(*Error)
-	if !ok {
-		t.Fatalf("error should be kind of Error, instead: %#v", err)
+	if !errors.As(err, &derr) {
+		t.Fatalf("error should be a type implementing Unwrap() []error, instead: %#v", err)
 	}
 
-	if derr.Errors[0] != "cannot parse 'Vuint', -42.000000 overflows uint" {
+	errs = derr.Unwrap()
+
+	if errs[0].Error() != "cannot parse 'Vuint', -42.000000 overflows uint" {
 		t.Errorf("got unexpected error: %s", err)
 	}
 }

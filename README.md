@@ -37,7 +37,7 @@ If you need more time to migrate your code, that is absolutely fine.
 Some of the latest fixes are backported to the v1 release branch of this package, so you can use the Go modules `replace` feature until you are ready to migrate:
 
 ```shell
-The repository will not go away and will only be archived
+replace github.com/mitchellh/mapstructure => github.com/go-viper/mapstructure v1.6.0
 ```
 
 ## Usage & Example
