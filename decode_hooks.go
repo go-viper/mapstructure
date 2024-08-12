@@ -297,6 +297,36 @@ func RecursiveStructToMapHookFunc() DecodeHookFunc {
 	}
 }
 
+// TextMarshallerHookFunc returns a DecodeHookFunc that applies
+// the TextMarshaler interface to the value before decoding.
+func TextMarshallerHookFunc() DecodeHookFuncType {
+	return func(
+		f reflect.Type,
+		t reflect.Type,
+		data interface{},
+	) (interface{}, error) {
+		if t.Kind() != reflect.String {
+			return data, nil
+		}
+
+		// If the value is already a string, just return it (casting if required).
+		if f.Kind() == reflect.String {
+			return reflect.Indirect(reflect.ValueOf(&data)).Elem().String(), nil
+		}
+
+		// Does the value implement the TextMarshaler interface?
+		if marshaler, ok := data.(encoding.TextMarshaler); ok {
+			text, err := marshaler.MarshalText()
+			if err != nil {
+				return nil, err
+			}
+			return string(text), nil
+		}
+
+		return data, nil
+	}
+}
+
 // TextUnmarshallerHookFunc returns a DecodeHookFunc that applies
 // strings to the UnmarshalText function, when the target type
 // implements the encoding.TextUnmarshaler interface

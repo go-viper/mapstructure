@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math/big"
+	"net/netip"
 	"reflect"
 	"sort"
 	"strings"
@@ -2929,6 +2931,48 @@ func TestDecode_StructTaggedWithOmitempty_KeepNonEmptyValues(t *testing.T) {
 
 	if !reflect.DeepEqual(actual, expected) {
 		t.Fatalf("Decode() expected: %#v, got: %#v", expected, actual)
+	}
+}
+
+func TestDecode_structToMapWithDecodeHook(t *testing.T) {
+	t.Parallel()
+
+	type Embedded struct {
+		Foo *big.Int
+	}
+
+	type From struct {
+		*Embedded `mapstructure:",squash"`
+		Bar       *big.Int
+		Baz       netip.Addr
+	}
+
+	expected := map[string]string{
+		"Foo": "1729",
+		"Bar": "42",
+		"Baz": "::1",
+	}
+
+	target := map[string]string{}
+	decoder, err := NewDecoder(&DecoderConfig{
+		Result:     &target,
+		DecodeHook: TextMarshallerHookFunc(),
+	})
+	if err != nil {
+		t.Fatalf("got error: %s", err)
+	}
+
+	err = decoder.Decode(&From{
+		Embedded: &Embedded{Foo: big.NewInt(1729)},
+		Bar:      big.NewInt(42),
+		Baz:      netip.IPv6Loopback(),
+	})
+	if err != nil {
+		t.Fatalf("got error: %s", err)
+	}
+
+	if !reflect.DeepEqual(target, expected) {
+		t.Fatalf("bad: %#v", target)
 	}
 }
 

@@ -958,9 +958,6 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 		// Next get the actual value of this field and verify it is assignable
 		// to the map value.
 		v := dataVal.Field(i)
-		if !v.Type().AssignableTo(valMap.Type().Elem()) {
-			return fmt.Errorf("cannot assign type '%s' to map value field of type '%s'", v.Type(), valMap.Type().Elem())
-		}
 
 		tagValue := f.Tag.Get(d.config.TagName)
 		keyName := f.Name
@@ -975,12 +972,14 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 		v = dereferencePtrToStructIfNeeded(v, d.config.TagName)
 
 		// Determine the name of the key in the map
+		var omitEmpty bool
 		if index := strings.Index(tagValue, ","); index != -1 {
 			if tagValue[:index] == "-" {
 				continue
 			}
 			// If "omitempty" is specified in the tag, it ignores empty values.
-			if strings.Index(tagValue[index+1:], "omitempty") != -1 && isEmptyValue(v) {
+			omitEmpty = strings.Index(tagValue[index+1:], "omitempty") != -1
+			if omitEmpty && isEmptyValue(v) {
 				continue
 			}
 
@@ -1028,6 +1027,18 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 			vType := valMap.Type()
 			vKeyType := vType.Key()
 			vElemType := vType.Elem()
+
+			// Is it possible to directly convert the struct to the field type?
+			if vElemType.Kind() != reflect.Interface {
+				fieldVal := reflect.New(vElemType).Elem()
+				if err := d.decode(keyName, v.Interface(), fieldVal); err == nil {
+					if !omitEmpty || !isEmptyValue(fieldVal) {
+						valMap.SetMapIndex(reflect.ValueOf(keyName), fieldVal)
+					}
+					continue
+				}
+			}
+
 			mType := reflect.MapOf(vKeyType, vElemType)
 			vMap := reflect.MakeMap(mType)
 
@@ -1049,14 +1060,35 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 
 			if squash {
 				for _, k := range vMap.MapKeys() {
+					if !vMap.MapIndex(k).Type().AssignableTo(valMap.Type().Elem()) {
+						return fmt.Errorf("cannot assign type '%s' to map value field of type '%s'", vMap.MapIndex(k).Type(), valMap.Type().Elem())
+					}
+
 					valMap.SetMapIndex(k, vMap.MapIndex(k))
 				}
 			} else {
+				if !vMap.Type().AssignableTo(valMap.Type().Elem()) {
+					return fmt.Errorf("cannot assign type '%s' to map value field of type '%s'", vMap.Type(), valMap.Type().Elem())
+				}
+
 				valMap.SetMapIndex(reflect.ValueOf(keyName), vMap)
 			}
 
 		default:
-			valMap.SetMapIndex(reflect.ValueOf(keyName), v)
+			if valMap.Type().Elem().Kind() == reflect.Interface {
+				// If the map value is an interface{}, we can just set the value directly.
+				valMap.SetMapIndex(reflect.ValueOf(keyName), v)
+			} else {
+				// Otherwise, we need to attempt to decode the value into the proper type.
+				fieldVal := reflect.New(valMap.Type().Elem()).Elem()
+				if err := d.decode(keyName, v.Interface(), fieldVal); err != nil {
+					return err
+				}
+
+				if !omitEmpty || !isEmptyValue(fieldVal) {
+					valMap.SetMapIndex(reflect.ValueOf(keyName), fieldVal)
+				}
+			}
 		}
 	}
 
