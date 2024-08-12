@@ -1113,7 +1113,7 @@ func TestDecode_SquashOnInterfaceType(t *testing.T) {
 		"VBar": "43",
 	}
 
-	var result = SquashOnInterfaceType{
+	result := SquashOnInterfaceType{
 		TestInterface: &TestInterfaceImpl{},
 	}
 	err := Decode(input, &result)
@@ -1142,7 +1142,7 @@ func TestDecode_SquashOnOuterNestedInterfaceType(t *testing.T) {
 		"Vbarfoo": "45",
 	}
 
-	var result = SquashOnNestedInterfaceType{
+	result := SquashOnNestedInterfaceType{
 		NestedSquash: NestedSquash{
 			SquashOnInterfaceType: SquashOnInterfaceType{
 				TestInterface: &TestInterfaceImpl{},
@@ -1186,7 +1186,7 @@ func TestDecode_SquashOnInnerNestedInterfaceType(t *testing.T) {
 		"Vbarfoo": "45",
 	}
 
-	var result = SquashOnInterfaceType{
+	result := SquashOnInterfaceType{
 		TestInterface: &TestNestedInterfaceImpl{
 			SquashOnNestedInterfaceType: SquashOnNestedInterfaceType{
 				NestedSquash: NestedSquash{
@@ -1232,7 +1232,7 @@ func TestDecode_SquashOnNilInterfaceType(t *testing.T) {
 		"VBar": "43",
 	}
 
-	var result = SquashOnInterfaceType{
+	result := SquashOnInterfaceType{
 		TestInterface: nil,
 	}
 	err := Decode(input, &result)
