@@ -3083,7 +3083,7 @@ func TestDecoder_IgnoreUntaggedFieldsWithStruct(t *testing.T) {
 	}
 }
 
-func TestDecoder_ForceDecoding(t *testing.T) {
+func TestDecoder_ForceDecode(t *testing.T) {
 	t.Parallel()
 
 	type transformed struct {
@@ -3092,60 +3092,66 @@ func TestDecoder_ForceDecoding(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		forceDecoding  bool
+		forceDecode    bool
 		input          *transformed
 		expectedResult transformed
-		decodeHook     func(f, t reflect.Type, v interface{}) (interface{}, error)
+		decodeHook     DecodeHookFunc
 	}{
 		{
-			name:          "forceDecoding=true for nil input",
-			forceDecoding: true,
-			input:         nil,
+			name:        "forceDecode=true for nil input with hook",
+			forceDecode: true,
+			input:       nil,
 			decodeHook: func(f, t reflect.Type, v interface{}) (interface{}, error) {
 				return transformed{message: "hello world!"}, nil
 			},
 			expectedResult: transformed{message: "hello world!"},
 		},
 		{
-			name:           "forceDecoding=true for non-nil input without hook",
-			forceDecoding:  true,
-			input:          &transformed{message: "this is a message"},
-			expectedResult: transformed{message: "this is a message"},
+			name:           "forceDecode=true for nil input without hook",
+			forceDecode:    true,
+			input:          nil,
+			expectedResult: transformed{message: ""},
 		},
 		{
-			name:          "forceDecoding=true for non-nil input with hook",
-			forceDecoding: true,
-			input:         &transformed{message: "this is a message"},
-			decodeHook: func(f, t reflect.Type, v interface{}) (interface{}, error) {
-				return transformed{message: "this is another message"}, nil
-			},
-			expectedResult: transformed{message: "this is another message"},
-		},
-		{
-			name:          "forceDecoding=false for nil input",
-			forceDecoding: false,
-			input:         nil,
+			name:        "forceDecode=false for nil input with hook",
+			forceDecode: false,
+			input:       nil,
 			decodeHook: func(f, t reflect.Type, v interface{}) (interface{}, error) {
 				return transformed{message: "hello world!"}, nil
 			},
 			expectedResult: transformed{message: ""},
 		},
 		{
-			name:           "forceDecoding=false for nil input without hook",
-			forceDecoding:  false,
+			name:           "forceDecode=false for nil input without hook",
+			forceDecode:    false,
 			input:          nil,
 			expectedResult: transformed{message: ""},
 		},
 		{
-			name:           "forceDecoding=false for non-nil input without hook",
-			forceDecoding:  false,
+			name:           "forceDecode=true for non-nil input without hook",
+			forceDecode:    true,
 			input:          &transformed{message: "this is a message"},
 			expectedResult: transformed{message: "this is a message"},
 		},
 		{
-			name:          "forceDecoding=false for non-nil input with hook",
-			forceDecoding: true,
-			input:         &transformed{message: "this is a message"},
+			name:        "forceDecode=true for non-nil input with hook",
+			forceDecode: true,
+			input:       &transformed{message: "this is a message"},
+			decodeHook: func(f, t reflect.Type, v interface{}) (interface{}, error) {
+				return transformed{message: "this is another message"}, nil
+			},
+			expectedResult: transformed{message: "this is another message"},
+		},
+		{
+			name:           "forceDecode=false for non-nil input without hook",
+			forceDecode:    false,
+			input:          &transformed{message: "this is a message"},
+			expectedResult: transformed{message: "this is a message"},
+		},
+		{
+			name:        "forceDecode=false for non-nil input with hook",
+			forceDecode: true,
+			input:       &transformed{message: "this is a message"},
 			decodeHook: func(f, t reflect.Type, v interface{}) (interface{}, error) {
 				return transformed{message: "this is another message"}, nil
 			},
@@ -3158,12 +3164,9 @@ func TestDecoder_ForceDecoding(t *testing.T) {
 
 			var result transformed
 			config := &DecoderConfig{
-				Result:        &result,
-				ForceDecoding: test.forceDecoding,
-			}
-
-			if test.decodeHook != nil {
-				config.DecodeHook = test.decodeHook
+				Result:      &result,
+				ForceDecode: test.forceDecode,
+				DecodeHook:  test.decodeHook,
 			}
 
 			decoder, err := NewDecoder(config)

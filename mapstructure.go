@@ -279,10 +279,10 @@ type DecoderConfig struct {
 	// to implement case-sensitive tag values, support snake casing, etc.
 	MatchName func(mapKey, fieldName string) bool
 
-	// ForceDecoding forces the [DecoderConfig.DecodeHook] to run on the
+	// ForceDecode forces the [DecoderConfig.DecodeHook] to run on the
 	// value passed into `input` in [Decoder.Decode] regardless of what
 	// the `input` contains.
-	ForceDecoding bool
+	ForceDecode bool
 }
 
 // A Decoder takes a raw interface value and turns it into structured
@@ -456,7 +456,7 @@ func (d *Decoder) decode(name string, input interface{}, outVal reflect.Value) e
 		}
 	}
 
-	if !d.config.ForceDecoding && input == nil {
+	if input == nil {
 		// If the data is nil, then we don't set anything, unless ZeroFields is set
 		// to true.
 		if d.config.ZeroFields {
@@ -466,7 +466,10 @@ func (d *Decoder) decode(name string, input interface{}, outVal reflect.Value) e
 				d.config.Metadata.Keys = append(d.config.Metadata.Keys, name)
 			}
 		}
-		return nil
+
+		if !d.config.ForceDecode || d.config.DecodeHook == nil {
+			return nil
+		}
 	}
 
 	if !inputVal.IsValid() {
