@@ -279,10 +279,9 @@ type DecoderConfig struct {
 	// to implement case-sensitive tag values, support snake casing, etc.
 	MatchName func(mapKey, fieldName string) bool
 
-	// ForceDecode forces the [DecoderConfig.DecodeHook] to run on the
-	// value passed into `input` in [Decoder.Decode] regardless of what
-	// the `input` contains.
-	ForceDecode bool
+	// DecodeNil will run the [DecoderConfig.DecodeHook] on the input
+	// even if the input to [Decoder.Decode] is nil.
+	DecodeNil bool
 }
 
 // A Decoder takes a raw interface value and turns it into structured
@@ -467,7 +466,7 @@ func (d *Decoder) decode(name string, input interface{}, outVal reflect.Value) e
 			}
 		}
 
-		if !d.config.ForceDecode || d.config.DecodeHook == nil {
+		if !d.config.DecodeNil || d.config.DecodeHook == nil {
 			return nil
 		}
 	}
