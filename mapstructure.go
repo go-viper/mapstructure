@@ -469,7 +469,7 @@ func (d *Decoder) decode(name string, input interface{}, outVal reflect.Value) e
 		return nil
 	}
 
-	if !d.config.ForceDecoding && !inputVal.IsValid() {
+	if !inputVal.IsValid() {
 		// If the input value is invalid, then we just set the value
 		// to be the zero value.
 		outVal.Set(reflect.Zero(outVal.Type()))
