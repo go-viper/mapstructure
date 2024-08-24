@@ -280,7 +280,7 @@ type DecoderConfig struct {
 	MatchName func(mapKey, fieldName string) bool
 
 	// DecodeNil will run the [DecoderConfig.DecodeHook] on the input
-	// even if the input to [Decoder.Decode] is nil.
+	// [Decoder.Decode] even if it is nil.
 	DecodeNil bool
 }
 
