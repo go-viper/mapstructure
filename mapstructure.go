@@ -278,6 +278,10 @@ type DecoderConfig struct {
 	// field name or tag. Defaults to `strings.EqualFold`. This can be used
 	// to implement case-sensitive tag values, support snake casing, etc.
 	MatchName func(mapKey, fieldName string) bool
+
+	// ForceDecoding forces the decoding hooks to run on the value passed into
+	// `input` in [Decoder.Decode] regardless of what the `input` contains.
+	ForceDecoding bool
 }
 
 // A Decoder takes a raw interface value and turns it into structured
@@ -451,7 +455,7 @@ func (d *Decoder) decode(name string, input interface{}, outVal reflect.Value) e
 		}
 	}
 
-	if input == nil {
+	if !d.config.ForceDecoding && input == nil {
 		// If the data is nil, then we don't set anything, unless ZeroFields is set
 		// to true.
 		if d.config.ZeroFields {
@@ -464,7 +468,7 @@ func (d *Decoder) decode(name string, input interface{}, outVal reflect.Value) e
 		return nil
 	}
 
-	if !inputVal.IsValid() {
+	if !d.config.ForceDecoding && !inputVal.IsValid() {
 		// If the input value is invalid, then we just set the value
 		// to be the zero value.
 		outVal.Set(reflect.Zero(outVal.Type()))
