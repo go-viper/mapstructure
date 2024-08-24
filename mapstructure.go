@@ -279,8 +279,9 @@ type DecoderConfig struct {
 	// to implement case-sensitive tag values, support snake casing, etc.
 	MatchName func(mapKey, fieldName string) bool
 
-	// ForceDecoding forces the decoding hooks to run on the value passed into
-	// `input` in [Decoder.Decode] regardless of what the `input` contains.
+	// ForceDecoding forces the [DecoderConfig.DecodeHook] to run on the
+	// value passed into `input` in [Decoder.Decode] regardless of what
+	// the `input` contains.
 	ForceDecoding bool
 }
 
