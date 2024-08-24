@@ -3090,7 +3090,7 @@ func TestDecoder_DecodeNil(t *testing.T) {
 		Message string
 	}
 
-	var nilInterface *Transformed
+	var nilInput *Transformed
 
 	tests := []struct {
 		name           string
@@ -3102,7 +3102,7 @@ func TestDecoder_DecodeNil(t *testing.T) {
 		{
 			name:      "decodeNil=true for nil input with hook",
 			decodeNil: true,
-			input:     nilInterface,
+			input:     nilInput,
 			decodeHook: func(f, t reflect.Type, v interface{}) (interface{}, error) {
 				return Transformed{Message: "hello world!"}, nil
 			},
@@ -3111,13 +3111,13 @@ func TestDecoder_DecodeNil(t *testing.T) {
 		{
 			name:           "decodeNil=true for nil input without hook",
 			decodeNil:      true,
-			input:          nilInterface,
+			input:          nilInput,
 			expectedResult: Transformed{Message: ""},
 		},
 		{
 			name:      "decodeNil=false for nil input with hook",
 			decodeNil: false,
-			input:     nilInterface,
+			input:     nilInput,
 			decodeHook: func(f, t reflect.Type, v interface{}) (interface{}, error) {
 				return Transformed{Message: "hello world!"}, nil
 			},
@@ -3126,7 +3126,7 @@ func TestDecoder_DecodeNil(t *testing.T) {
 		{
 			name:           "decodeNil=false for nil input without hook",
 			decodeNil:      false,
-			input:          nilInterface,
+			input:          nilInput,
 			expectedResult: Transformed{Message: ""},
 		},
 		{
