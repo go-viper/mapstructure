@@ -279,8 +279,8 @@ type DecoderConfig struct {
 	// to implement case-sensitive tag values, support snake casing, etc.
 	MatchName func(mapKey, fieldName string) bool
 
-	// DecodeNil, if set to true, will try to perform decoding on the input even
-	// if the input is nil.
+	// DecodeNil, if set to true, will cause the DecodeHook (if present) to run
+	// even if the input is nil. This can be used to provide default values.
 	DecodeNil bool
 }
 
@@ -478,7 +478,9 @@ func (d *Decoder) decode(name string, input interface{}, outVal reflect.Value) e
 		if d.config.Metadata != nil && name != "" {
 			d.config.Metadata.Keys = append(d.config.Metadata.Keys, name)
 		}
-		return nil
+		if !d.config.DecodeNil || d.config.DecodeHook == nil {
+			return nil
+		}
 	}
 
 	if d.cachedDecodeHook != nil {

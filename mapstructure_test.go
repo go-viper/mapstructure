@@ -3090,8 +3090,6 @@ func TestDecoder_DecodeNil(t *testing.T) {
 		Message string
 	}
 
-	var nilInput *Transformed
-
 	tests := []struct {
 		name           string
 		decodeNil      bool
@@ -3102,8 +3100,8 @@ func TestDecoder_DecodeNil(t *testing.T) {
 		{
 			name:      "decodeNil=true for nil input with hook",
 			decodeNil: true,
-			input:     nilInput,
-			decodeHook: func(f, t reflect.Type, v interface{}) (interface{}, error) {
+			input:     nil,
+			decodeHook: func(f, t reflect.Value) (interface{}, error) {
 				return Transformed{Message: "hello world!"}, nil
 			},
 			expectedResult: Transformed{Message: "hello world!"},
@@ -3111,14 +3109,14 @@ func TestDecoder_DecodeNil(t *testing.T) {
 		{
 			name:           "decodeNil=true for nil input without hook",
 			decodeNil:      true,
-			input:          nilInput,
+			input:          nil,
 			expectedResult: Transformed{Message: ""},
 		},
 		{
 			name:      "decodeNil=false for nil input with hook",
 			decodeNil: false,
-			input:     nilInput,
-			decodeHook: func(f, t reflect.Type, v interface{}) (interface{}, error) {
+			input:     nil,
+			decodeHook: func(f, t reflect.Value) (interface{}, error) {
 				return Transformed{Message: "hello world!"}, nil
 			},
 			expectedResult: Transformed{Message: ""},
@@ -3126,7 +3124,7 @@ func TestDecoder_DecodeNil(t *testing.T) {
 		{
 			name:           "decodeNil=false for nil input without hook",
 			decodeNil:      false,
-			input:          nilInput,
+			input:          nil,
 			expectedResult: Transformed{Message: ""},
 		},
 		{
@@ -3139,7 +3137,7 @@ func TestDecoder_DecodeNil(t *testing.T) {
 			name:      "decodeNil=true for non-nil input with hook",
 			decodeNil: true,
 			input:     map[string]interface{}{"message": "this is a message"},
-			decodeHook: func(f, t reflect.Type, v interface{}) (interface{}, error) {
+			decodeHook: func(f, t reflect.Value) (interface{}, error) {
 				return Transformed{Message: "this is another message"}, nil
 			},
 			expectedResult: Transformed{Message: "this is another message"},
@@ -3154,7 +3152,7 @@ func TestDecoder_DecodeNil(t *testing.T) {
 			name:      "decodeNil=false for non-nil input with hook",
 			decodeNil: false,
 			input:     map[string]interface{}{"message": "this is a message"},
-			decodeHook: func(f, t reflect.Type, v interface{}) (interface{}, error) {
+			decodeHook: func(f, t reflect.Value) (interface{}, error) {
 				return Transformed{Message: "this is another message"}, nil
 			},
 			expectedResult: Transformed{Message: "this is another message"},
