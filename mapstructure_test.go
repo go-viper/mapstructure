@@ -3194,6 +3194,23 @@ func TestDecoder_DecodeNil(t *testing.T) {
 			},
 			expectedResult: Transformed{Message: "hello world!"},
 		},
+		{
+			name:           "decodeNil=false for nil input without hook and non-empty result",
+			decodeNil:      true,
+			input:          nil,
+			result:         Transformed{Message: "this is a non empty result"},
+			expectedResult: Transformed{Message: "this is a non empty result"},
+		},
+		{
+			name:      "decodeNil=false for nil input with hook and non-empty result",
+			decodeNil: false,
+			input:     nil,
+			result:    Transformed{Message: "this is a non empty result"},
+			decodeHook: func(f, t reflect.Value) (interface{}, error) {
+				return Transformed{Message: "hello world!"}, nil
+			},
+			expectedResult: Transformed{Message: "this is a non empty result"},
+		},
 	}
 
 	for _, test := range tests {
