@@ -3196,7 +3196,7 @@ func TestDecoder_DecodeNil(t *testing.T) {
 		},
 		{
 			name:           "decodeNil=false for nil input without hook and non-empty result",
-			decodeNil:      true,
+			decodeNil:      false,
 			input:          nil,
 			result:         Transformed{Message: "this is a non empty result"},
 			expectedResult: Transformed{Message: "this is a non empty result"},
