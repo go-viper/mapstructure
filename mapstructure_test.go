@@ -3083,7 +3083,7 @@ func TestDecoder_IgnoreUntaggedFieldsWithStruct(t *testing.T) {
 	}
 }
 
-func TestDecoder_DecodeNil(t *testing.T) {
+func TestDecoder_CanPerformDecodingForNilInputs(t *testing.T) {
 	t.Parallel()
 
 	type Transformed struct {
