@@ -455,6 +455,8 @@ func (d *Decoder) decode(name string, input interface{}, outVal reflect.Value) e
 		}
 	}
 
+	performNilDecoding := d.config.DecodeNil && d.config.DecodeHook != nil
+
 	if input == nil {
 		// If the data is nil, then we don't set anything, unless ZeroFields is set
 		// to true.
@@ -466,13 +468,13 @@ func (d *Decoder) decode(name string, input interface{}, outVal reflect.Value) e
 			}
 		}
 
-		if !d.config.DecodeNil || d.config.DecodeHook == nil {
+		if !performNilDecoding {
 			return nil
 		}
 	}
 
 	if !inputVal.IsValid() {
-		if !d.config.DecodeNil || d.config.DecodeHook == nil {
+		if !performNilDecoding {
 			// If the input value is invalid, then we just set the value
 			// to be the zero value.
 			outVal.Set(reflect.Zero(outVal.Type()))
