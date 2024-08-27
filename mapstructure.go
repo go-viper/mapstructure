@@ -472,15 +472,20 @@ func (d *Decoder) decode(name string, input interface{}, outVal reflect.Value) e
 	}
 
 	if !inputVal.IsValid() {
-		// If the input value is invalid, then we just set the value
-		// to be the zero value.
-		outVal.Set(reflect.Zero(outVal.Type()))
-		if d.config.Metadata != nil && name != "" {
-			d.config.Metadata.Keys = append(d.config.Metadata.Keys, name)
-		}
 		if !d.config.DecodeNil || d.config.DecodeHook == nil {
+			// If the input value is invalid, then we just set the value
+			// to be the zero value.
+			outVal.Set(reflect.Zero(outVal.Type()))
+			if d.config.Metadata != nil && name != "" {
+				d.config.Metadata.Keys = append(d.config.Metadata.Keys, name)
+			}
 			return nil
 		}
+
+		// If we get here, we have an untyped nil so the tpye of the input is assumed.
+		// We do this because all subsequent code requires a valid value for inputVal.
+		var mapVal map[string]interface{}
+		inputVal = reflect.MakeMap(reflect.TypeOf(mapVal))
 	}
 
 	if d.cachedDecodeHook != nil {
