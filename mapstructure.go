@@ -484,7 +484,7 @@ func (d *Decoder) decode(name string, input interface{}, outVal reflect.Value) e
 			return nil
 		}
 
-		// If we get here, we have an untyped nil so the tpye of the input is assumed.
+		// If we get here, we have an untyped nil so the type of the input is assumed.
 		// We do this because all subsequent code requires a valid value for inputVal.
 		var mapVal map[string]interface{}
 		inputVal = reflect.MakeMap(reflect.TypeOf(mapVal))
