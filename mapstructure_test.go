@@ -3107,6 +3107,15 @@ func TestDecoder_DecodeNil(t *testing.T) {
 			expectedResult: Transformed{Message: "hello world!"},
 		},
 		{
+			name:      "decodeNil=true for nil input with DecodeHookFuncType hook",
+			decodeNil: true,
+			input:     nil,
+			decodeHook: func(reflect.Type, reflect.Type, interface{}) (interface{}, error) {
+				return Transformed{Message: "hello world!"}, nil
+			},
+			expectedResult: Transformed{Message: "hello world!"},
+		},
+		{
 			name:           "decodeNil=true for nil input without hook",
 			decodeNil:      true,
 			input:          nil,
