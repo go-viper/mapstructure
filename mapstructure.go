@@ -439,7 +439,7 @@ func (d *Decoder) Decode(input interface{}) error {
 }
 
 // Decodes an unknown data type into a specific reflection value.
-func (d *Decoder) decode(name string, input interface{}, outVal reflect.Value) error {
+func (d *Decoder) decode(name string, input interface{}, outVal reflect.Value) (err error) {
 	var inputVal reflect.Value
 	if input != nil {
 		inputVal = reflect.ValueOf(input)
@@ -452,8 +452,7 @@ func (d *Decoder) decode(name string, input interface{}, outVal reflect.Value) e
 	}
 
 	if input == nil {
-		// If the data is nil, then we don't set anything, unless ZeroFields is set
-		// to true.
+		// If the data is nil, then we don't set anything, unless ZeroFields is set to true.
 		if d.config.ZeroFields {
 			outVal.Set(reflect.Zero(outVal.Type()))
 
@@ -461,12 +460,11 @@ func (d *Decoder) decode(name string, input interface{}, outVal reflect.Value) e
 				d.config.Metadata.Keys = append(d.config.Metadata.Keys, name)
 			}
 		}
-		return nil
+		return
 	}
 
 	if !inputVal.IsValid() {
-		// If the input value is invalid, then we just set the value
-		// to be the zero value.
+		// If the input value is invalid, then we just set the value to be the zero value.
 		outVal.Set(reflect.Zero(outVal.Type()))
 		if d.config.Metadata != nil && name != "" {
 			d.config.Metadata.Keys = append(d.config.Metadata.Keys, name)
@@ -476,17 +474,14 @@ func (d *Decoder) decode(name string, input interface{}, outVal reflect.Value) e
 
 	if d.cachedDecodeHook != nil {
 		// We have a DecodeHook, so let's pre-process the input.
-		var err error
 		input, err = d.cachedDecodeHook(inputVal, outVal)
 		if err != nil {
 			return fmt.Errorf("error decoding '%s': %w", name, err)
 		}
 	}
 
-	var err error
-	outputKind := getKind(outVal)
 	addMetaKey := true
-	switch outputKind {
+	switch outputKind := getKind(outVal); outputKind {
 	case reflect.Bool:
 		err = d.decodeBool(name, input, outVal)
 	case reflect.Interface:
@@ -945,7 +940,7 @@ func (d *Decoder) decodeMapFromMap(name string, dataVal reflect.Value, val refle
 	return errors.Join(errs...)
 }
 
-func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val reflect.Value, valMap reflect.Value) error {
+func (d *Decoder) decodeMapFromStruct(name string, dataVal, val, valMap reflect.Value) error {
 	typ := dataVal.Type()
 	for i := 0; i < typ.NumField(); i++ {
 		// Get the StructField first since this is a cheap operation. If the
@@ -1037,6 +1032,24 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 			// where as reflect.MakeMap returns an unsettable map.
 			addrVal := reflect.New(vMap.Type())
 			reflect.Indirect(addrVal).Set(vMap)
+
+			// Allows custom values of hooks to be entered into a map
+			if d.cachedDecodeHook != nil {
+				input, err := d.cachedDecodeHook(x, valMap)
+				if err != nil {
+					return fmt.Errorf("error decoding '%s': %w", name, err)
+				}
+
+				inputVal := reflect.ValueOf(input)
+				if inputVal.Kind() == reflect.Ptr {
+					inputVal = inputVal.Elem()
+				}
+
+				if inputVal.Kind() != reflect.Struct {
+					valMap.SetMapIndex(reflect.ValueOf(keyName), inputVal)
+					continue
+				}
+			}
 
 			err := d.decode(keyName, x.Interface(), reflect.Indirect(addrVal))
 			if err != nil {
