@@ -1047,6 +1047,7 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal, val, valMap reflect.
 
 				if inputVal.Kind() != reflect.Struct {
 					valMap.SetMapIndex(reflect.ValueOf(keyName), inputVal)
+					continue
 				}
 			}
 
