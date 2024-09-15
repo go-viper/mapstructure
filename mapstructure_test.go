@@ -3,6 +3,7 @@ package mapstructure
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"reflect"
 	"sort"
@@ -3088,6 +3089,7 @@ func TestDecoder_CanPerformDecodingForNilInputs(t *testing.T) {
 
 	type Transformed struct {
 		Message string
+		When    string
 	}
 
 	helloHook := func(reflect.Type, reflect.Type, interface{}) (interface{}, error) {
@@ -3095,6 +3097,15 @@ func TestDecoder_CanPerformDecodingForNilInputs(t *testing.T) {
 	}
 	goodbyeHook := func(reflect.Type, reflect.Type, interface{}) (interface{}, error) {
 		return Transformed{Message: "goodbye"}, nil
+	}
+	appendHook := func(from reflect.Value, to reflect.Value) (interface{}, error) {
+		if from.Kind() == reflect.Map {
+			fmt.Printf("%v\n", from.Kind())
+			stringMap := from.Interface().(map[string]interface{})
+			stringMap["when"] = "see you later"
+			return stringMap, nil
+		}
+		return from.Interface(), nil
 	}
 
 	tests := []struct {
@@ -3186,6 +3197,32 @@ func TestDecoder_CanPerformDecodingForNilInputs(t *testing.T) {
 			result:         Transformed{Message: "foo"},
 			decodeHook:     helloHook,
 			expectedResult: Transformed{Message: "foo"},
+		},
+		{
+			name:           "decodeNil=false for non-nil input with hook that appends a value",
+			decodeNil:      false,
+			input:          map[string]interface{}{"message": "bar"},
+			decodeHook:     appendHook,
+			expectedResult: Transformed{Message: "bar", When: "see you later"},
+		},
+		{
+			name:           "decodeNil=true for non-nil input with hook that appends a value",
+			decodeNil:      true,
+			input:          map[string]interface{}{"message": "bar"},
+			decodeHook:     appendHook,
+			expectedResult: Transformed{Message: "bar", When: "see you later"},
+		},
+		{
+			name:           "decodeNil=true for nil input with hook that appends a value",
+			decodeNil:      true,
+			decodeHook:     appendHook,
+			expectedResult: Transformed{When: "see you later"},
+		},
+		{
+			name:           "decodeNil=false for nil input with hook that appends a value",
+			decodeNil:      false,
+			decodeHook:     appendHook,
+			expectedResult: Transformed{},
 		},
 	}
 
