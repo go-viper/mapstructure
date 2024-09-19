@@ -3228,7 +3228,6 @@ func TestDecoder_CanPerformDecodingForNilInputs(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-
 			config := &DecoderConfig{
 				Result:     &test.result,
 				DecodeNil:  test.decodeNil,
