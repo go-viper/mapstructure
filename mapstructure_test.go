@@ -3,7 +3,6 @@ package mapstructure
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"reflect"
 	"sort"
@@ -3100,7 +3099,6 @@ func TestDecoder_CanPerformDecodingForNilInputs(t *testing.T) {
 	}
 	appendHook := func(from reflect.Value, to reflect.Value) (interface{}, error) {
 		if from.Kind() == reflect.Map {
-			fmt.Printf("%v\n", from.Kind())
 			stringMap := from.Interface().(map[string]interface{})
 			stringMap["when"] = "see you later"
 			return stringMap, nil
