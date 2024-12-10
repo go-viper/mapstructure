@@ -783,11 +783,12 @@ func (d *Decoder) decodeBool(name string, data interface{}, val reflect.Value) e
 		val.SetBool(dataVal.Float() != 0)
 	case dataKind == reflect.String && d.config.WeaklyTypedInput:
 		b, err := strconv.ParseBool(dataVal.String())
-		if err == nil {
+		switch {
+		case err == nil:
 			val.SetBool(b)
-		} else if dataVal.String() == "" {
+		case dataVal.String() == "":
 			val.SetBool(false)
-		} else {
+		default:
 			return fmt.Errorf("cannot parse '%s' as bool: %s", name, err)
 		}
 	default:
@@ -1007,7 +1008,7 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 				continue
 			}
 			// If "omitempty" is specified in the tag, it ignores empty values.
-			if strings.Index(tagValue[index+1:], "omitempty") != -1 && isEmptyValue(v) {
+			if strings.Contains(tagValue[index+1:], "omitempty") && isEmptyValue(v) {
 				continue
 			}
 
@@ -1023,18 +1024,16 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 				if v.Kind() != reflect.Struct {
 					return fmt.Errorf("cannot squash non-struct type '%s'", v.Type())
 				}
-			} else {
-				if strings.Index(tagValue[index+1:], "remain") != -1 {
-					if v.Kind() != reflect.Map {
-						return fmt.Errorf("error remain-tag field with invalid type: '%s'", v.Type())
-					}
-
-					ptr := v.MapRange()
-					for ptr.Next() {
-						valMap.SetMapIndex(ptr.Key(), ptr.Value())
-					}
-					continue
+			} else if strings.Contains(tagValue[index+1:], "remain") {
+				if v.Kind() != reflect.Map {
+					return fmt.Errorf("error remain-tag field with invalid type: '%s'", v.Type())
 				}
+
+				ptr := v.MapRange()
+				for ptr.Next() {
+					valMap.SetMapIndex(ptr.Key(), ptr.Value())
+				}
+				continue
 			}
 			if keyNameTagValue := tagValue[:index]; keyNameTagValue != "" {
 				keyName = keyNameTagValue

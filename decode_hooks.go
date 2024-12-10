@@ -278,8 +278,7 @@ func WeaklyTypedHook(
 	data interface{},
 ) (interface{}, error) {
 	dataVal := reflect.ValueOf(data)
-	switch t {
-	case reflect.String:
+	if t == reflect.String {
 		switch f {
 		case reflect.Bool:
 			if dataVal.Bool() {
