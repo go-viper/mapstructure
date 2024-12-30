@@ -3,8 +3,10 @@ package mapstructure
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 func ExampleDecode() {
@@ -356,4 +358,354 @@ func ExampleDecode_decodeHookFunc() {
 	fmt.Printf("%#v", result)
 	// Output:
 	// mapstructure.Person{Name:"Mitchell", Location:mapstructure.PersonLocation{Latitude:-35.2809, Longtitude:149.13}}
+}
+
+type CustomUnmarshaler struct {
+	ID int64
+}
+
+func (c *CustomUnmarshaler) UnmarshalMapstructure(v interface{}) error {
+	if sid, ok := v.(string); ok {
+		id, err := strconv.ParseInt(sid, 10, 64)
+		if err != nil {
+			return fmt.Errorf("error converting id to int, %v", err)
+		}
+		c.ID = id
+		return nil
+
+	}
+	return fmt.Errorf("error unmarshaling")
+}
+
+func ExampleDecode_structImplementsUnmarshalerInterface() {
+	type Custom struct {
+		Unmarshalers []CustomUnmarshaler
+	}
+	input := map[string]interface{}{
+		"unmarshalers": []string{"123456"},
+	}
+	var result Custom
+	err := Decode(input, &result)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("%#v", result)
+	// Output:
+	// mapstructure.Custom{Unmarshalers:[]mapstructure.CustomUnmarshaler{mapstructure.CustomUnmarshaler{ID:123456}}}
+}
+
+// Config is an interface for cache configs. The configs can
+// then be used to spawn new Cache providers.
+//
+// As part of this test the cache providers are omitted.
+type Config interface {
+	Name() string
+}
+
+type Configs []Config
+
+// RedisConfig implements the Config interface and
+// is used to launch a new Redis Cache Provider
+type RedisConfig struct {
+	Enabled  bool   `mapstructure:"enabled"`
+	Host     string `mapstructure:"host"`
+	Port     int    `mapstructure:"port"`
+	Username string `mapstructure:"username"`
+	Password string `mapstructure:"password"`
+}
+
+func (c *RedisConfig) Name() string {
+	return "redis"
+}
+
+// MemcachedConfig implements the Config interface and
+// is used to launch a new Memcached Cache Provider
+type MemcachedConfig struct {
+	Enabled bool   `mapstructure:"enabled"`
+	Host    string `mapstructure:"host"`
+	Port    int    `mapstructure:"port"`
+}
+
+func (m *MemcachedConfig) Name() string {
+	return "memcached"
+}
+
+type CachesConfig struct {
+	CacheConfig Configs `mapstructure:"-,omitempty"`
+}
+
+func (c *CachesConfig) UnmarshalMapstructure(in interface{}) error {
+	*c = CachesConfig{}
+	if err := UnmarshalWithInlineConfigs(c, in); err != nil {
+		return err
+	}
+	return nil
+}
+
+// AppConfig simulates the configuration that will be used in an app
+// that uses multiple cache providers.
+type AppConfig struct {
+	Cache []*CachesConfig `mapstructure:"caches"`
+}
+
+var (
+	configFieldPrefix = "CACHES_"
+	configNames       = make(map[string]Config)
+	configFieldNames  = make(map[reflect.Type]string)
+	configFields      []reflect.StructField
+
+	configTypesMu sync.Mutex
+	configTypes   = make(map[reflect.Type]reflect.Type)
+
+	emptyStructType = reflect.TypeOf(struct{}{})
+	configsType     = reflect.TypeOf(Configs{})
+)
+
+func getConfigType(out reflect.Type) reflect.Type {
+	configTypesMu.Lock()
+	defer configTypesMu.Unlock()
+	if typ, ok := configTypes[out]; ok {
+		return typ
+	}
+	// Initial exported fields map one-to-one.
+	var fields []reflect.StructField
+	for i, n := 0, out.NumField(); i < n; i++ {
+		switch field := out.Field(i); {
+		case field.PkgPath == "" && field.Type != configsType:
+			fields = append(fields, field)
+		default:
+			fields = append(fields, reflect.StructField{
+				Name:    "_" + field.Name, // Field must be unexported.
+				PkgPath: out.PkgPath(),
+				Type:    emptyStructType,
+			})
+		}
+	}
+	// Append extra config fields on the end.
+	fields = append(fields, configFields...)
+	typ := reflect.StructOf(fields)
+	configTypes[out] = typ
+	return typ
+}
+
+// UnmarshalWithInlineConfigs helps implement mapstructure.Unmarshaler interface for structs
+// that have a Configs field that should be inlined.
+func UnmarshalWithInlineConfigs(out interface{}, in interface{}) error {
+	outVal := reflect.ValueOf(out)
+	if outVal.Kind() != reflect.Ptr {
+		return fmt.Errorf("can only unmarshal into a struct pointer: %T", out)
+	}
+	outVal = outVal.Elem()
+	if outVal.Kind() != reflect.Struct {
+		return fmt.Errorf("can only unmarshal into a struct pointer: %T", out)
+	}
+	outTyp := outVal.Type()
+
+	cfgTyp := getConfigType(outTyp)
+	cfgPtr := reflect.New(cfgTyp)
+	cfgVal := cfgPtr.Elem()
+
+	// Copy shared fields (defaults) to dynamic value.
+	var configs *Configs
+	for i, n := 0, outVal.NumField(); i < n; i++ {
+		if outTyp.Field(i).Type == configsType {
+			configs = outVal.Field(i).Addr().Interface().(*Configs)
+			continue
+		}
+		if cfgTyp.Field(i).PkgPath != "" {
+			continue // Field is unexported: ignore.
+		}
+		cfgVal.Field(i).Set(outVal.Field(i))
+	}
+	if configs == nil {
+		return fmt.Errorf("configs field not found in type: %T", out)
+	}
+
+	if cfgPtr.CanInterface() {
+		// since the downstream configuration objects don't need anything special
+		// just call mapstructure.Decode
+		if err := Decode(in, cfgPtr.Interface()); err != nil {
+			return err
+		}
+	}
+
+	// Copy shared fields from dynamic value.
+	for i, n := 0, outVal.NumField(); i < n; i++ {
+		if cfgTyp.Field(i).PkgPath != "" {
+			continue // Field is unexported: ignore.
+		}
+		outVal.Field(i).Set(cfgVal.Field(i))
+	}
+
+	var err error
+	*configs, err = readConfigs(cfgVal, outVal.NumField())
+	return err
+}
+
+func readConfigs(structVal reflect.Value, startField int) (Configs, error) {
+	var (
+		configs Configs
+	)
+	for i, n := startField, structVal.NumField(); i < n; i++ {
+		field := structVal.Field(i)
+		if field.Kind() != reflect.Slice {
+			panic("discovery: internal error: field is not a slice")
+		}
+		for k := 0; k < field.Len(); k++ {
+			val := field.Index(k)
+			if val.IsZero() || (val.Kind() == reflect.Ptr && val.Elem().IsZero()) {
+				key := configFieldNames[field.Type().Elem()]
+				key = strings.TrimPrefix(key, configFieldPrefix)
+				return nil, fmt.Errorf("empty or null section in %s", key)
+			}
+			switch c := val.Interface().(type) {
+			case Config:
+				configs = append(configs, c)
+			default:
+				panic("stream: internal error: slice element is not a Config")
+			}
+		}
+	}
+	return configs, nil
+}
+
+// RegisterConfig registers the given Config type for mapstructure unmarshaling.
+func RegisterConfig(config Config) {
+	registerConfig(config.Name(), reflect.TypeOf(config), config)
+}
+
+func registerConfig(mapstructureKey string, elemType reflect.Type, config Config) {
+	name := config.Name()
+	if _, ok := configNames[name]; ok {
+		return
+	}
+	configNames[name] = config
+
+	fieldName := configFieldPrefix + mapstructureKey // Field must be exported.
+	configFieldNames[elemType] = fieldName
+
+	// Insert fields in sorted order.
+	i := sort.Search(len(configFields), func(k int) bool {
+		return fieldName < configFields[k].Name
+	})
+	configFields = append(configFields, reflect.StructField{}) // Add empty field at end.
+	copy(configFields[i+1:], configFields[i:])                 // Shift fields to the right.
+	configFields[i] = reflect.StructField{ // Write new field in place.
+		Name: fieldName,
+		Type: reflect.SliceOf(elemType),
+		Tag:  reflect.StructTag(`mapstructure:"` + mapstructureKey + `,omitempty"`),
+	}
+}
+
+func ExampleDecode_structImplementsUnmarshalerInterfaceDynamicFields() {
+	// Given the following YAML structure, use the Unmarshaler interface
+	// to inline the cache configurations
+	//
+	// caches:
+	//  - redis:
+	//      - enabled: true
+	//        host: "localhost"
+	//        port: 6379
+	//        username: "user"
+	//        password: "password"
+	//  - memcached:
+	//      - enabled: true
+	//        host: "localhost"
+	//        port: 11211
+	input := map[string]interface{}{
+		"caches": []interface{}{
+			map[string]interface{}{
+				"redis": []map[string]interface{}{
+					{
+						"enabled":  true,
+						"host":     "localhost",
+						"port":     6379,
+						"username": "user",
+						"password": "password",
+					},
+				},
+			},
+			map[string]interface{}{
+				"memcached": []map[string]interface{}{
+					{
+						"enabled": true,
+						"host":    "localhost",
+						"port":    11211,
+					},
+				},
+			},
+		},
+	}
+	RegisterConfig(&RedisConfig{})
+	RegisterConfig(&MemcachedConfig{})
+	var result AppConfig
+	err := Decode(input, &result)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("%#v\n", len(result.Cache))
+	redis := result.Cache[0].CacheConfig[0].(*RedisConfig)
+	fmt.Printf("%#v\n", redis)
+	memcached := result.Cache[1].CacheConfig[0].(*MemcachedConfig)
+	fmt.Printf("%#v", memcached)
+	// Output:
+	// 2
+	// &mapstructure.RedisConfig{Enabled:true, Host:"localhost", Port:6379, Username:"user", Password:"password"}
+	// &mapstructure.MemcachedConfig{Enabled:true, Host:"localhost", Port:11211}
+}
+
+func ExampleDecode_structImplementsUnmarshalerInterfaceDynamicFieldsOneFieldWithMultipleValues() {
+	// Given the following YAML structure, use the Unmarshaler interface
+	// to inline the cache configurations
+	//
+	// caches:
+	//  - redis:
+	//      - enabled: true
+	//        host: "host1"
+	//        port: 6379
+	//        username: "user"
+	//        password: "password"
+	//  	- enabled: true
+	//        host: "host2"
+	//        port: 6379
+	//        username: "user2"
+	//        password: "password2"
+	input := map[string]interface{}{
+		"caches": []interface{}{
+			map[string]interface{}{
+				"redis": []map[string]interface{}{
+					{
+						"enabled":  true,
+						"host":     "host1",
+						"port":     6379,
+						"username": "user",
+						"password": "password",
+					},
+					{
+						"enabled":  true,
+						"host":     "host2",
+						"port":     6379,
+						"username": "user2",
+						"password": "password2",
+					},
+				},
+			},
+		},
+	}
+	RegisterConfig(&RedisConfig{})
+	RegisterConfig(&MemcachedConfig{})
+	var result AppConfig
+	err := Decode(input, &result)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("%#v\n", len(result.Cache))
+	redisOne := result.Cache[0].CacheConfig[0].(*RedisConfig)
+	fmt.Printf("%#v\n", redisOne)
+	redisTwo := result.Cache[0].CacheConfig[1].(*RedisConfig)
+	fmt.Printf("%#v", redisTwo)
+	// Output:
+	// 1
+	// &mapstructure.RedisConfig{Enabled:true, Host:"host1", Port:6379, Username:"user", Password:"password"}
+	// &mapstructure.RedisConfig{Enabled:true, Host:"host2", Port:6379, Username:"user2", Password:"password2"}
 }
