@@ -318,8 +318,7 @@ func ExampleDecode_decodeHookFunc() {
 				return data, nil
 			}
 
-			switch f.Kind() {
-			case reflect.String:
+			if f.Kind() == reflect.String {
 				xs := strings.Split(data.(string), "#")
 
 				if len(xs) == 2 {

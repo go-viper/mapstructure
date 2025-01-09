@@ -514,7 +514,7 @@ func TestDecodeIntermediateMapsSettable(t *testing.T) {
 				nanos := ts.UnixNano()
 
 				seconds := nanos / 1000000000
-				nanos = nanos % 1000000000
+				nanos %= 1000000000
 
 				return &map[string]interface{}{
 					"Seconds": seconds,

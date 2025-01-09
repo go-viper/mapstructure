@@ -16,6 +16,7 @@ linters:
   disable-all: true
   enable:
     - gci
+    - gocritic
     - gofmt
     - gofumpt
     - goimports
