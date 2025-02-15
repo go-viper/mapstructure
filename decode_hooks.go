@@ -145,10 +145,10 @@ func StringToSliceHookFunc(sep string) DecodeHookFunc {
 		t reflect.Type,
 		data interface{},
 	) (interface{}, error) {
-		if f.Kind() != reflect.String {
+		if f.Kind() != reflect.String || t.Kind() != reflect.Slice {
 			return data, nil
 		}
-		if t != reflect.SliceOf(f) {
+		if t.Elem().Kind() == reflect.Uint8 {
 			return data, nil
 		}
 
