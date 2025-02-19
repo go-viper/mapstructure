@@ -250,10 +250,11 @@ func TestComposeDecodeHookFunc_ReflectValueHook(t *testing.T) {
 }
 
 func TestStringToSliceHookFunc(t *testing.T) {
-	f := StringToSliceHookFunc(",")
+	f := ComposeDecodeHookFunc(StringToSliceHookFunc(","), StringToBasicTypeHookFunc())
 
 	strValue := reflect.ValueOf("42")
 	sliceValue := reflect.ValueOf([]string{"42"})
+	uintSliceValue := reflect.ValueOf([]uint{1, 2})
 	cases := []struct {
 		f, t   reflect.Value
 		result interface{}
@@ -272,6 +273,12 @@ func TestStringToSliceHookFunc(t *testing.T) {
 			reflect.ValueOf(""),
 			sliceValue,
 			[]string{},
+			false,
+		},
+		{
+			reflect.ValueOf("46,47,48"),
+			uintSliceValue,
+			[]string{"46", "47", "48"},
 			false,
 		},
 	}
