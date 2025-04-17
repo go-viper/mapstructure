@@ -1675,6 +1675,32 @@ func TestDecoder_ErrorUnset(t *testing.T) {
 	}
 }
 
+func TestDecoder_ErrorUnset_AllowUnsetPointer(t *testing.T) {
+	t.Parallel()
+
+	input := map[string]interface{}{
+		"vstring": "hello",
+		"foo":     "bar",
+	}
+
+	var result BasicPointer
+	config := &DecoderConfig{
+		ErrorUnset:        true,
+		AllowUnsetPointer: true,
+		Result:            &result,
+	}
+
+	decoder, err := NewDecoder(config)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	err = decoder.Decode(input)
+	if err != nil {
+		t.Fatal("error not expected")
+	}
+}
+
 func TestMap(t *testing.T) {
 	t.Parallel()
 
