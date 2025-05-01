@@ -30,7 +30,7 @@ The API is the same, so you don't need to change anything else.
 Here is a script that can help you with the migration:
 
 ```shell
-sed -i 's/github.com\/mitchellh\/mapstructure/github.com\/go-viper\/mapstructure\/v2/g' $(find . -type f -name '*.go')
+sed -i 's|github.com/mitchellh/mapstructure|github.com/go-viper/mapstructure/v2|g' $(find . -type f -name '*.go')
 ```
 
 If you need more time to migrate your code, that is absolutely fine.
