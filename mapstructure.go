@@ -262,8 +262,8 @@ type DecoderConfig struct {
 	// value.
 	Result interface{}
 
-	// The tag name that mapstructure reads for field names. This
-	// defaults to "mapstructure"
+	// The tag names that mapstructure reads for field names, separated by comma.
+	// First found tag will be used. This defaults to "mapstructure"
 	TagName string
 
 	// The option of the value in the tag that indicates a field should
@@ -1007,7 +1007,7 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 				continue
 			}
 			// If "omitempty" is specified in the tag, it ignores empty values.
-			if strings.Index(tagValue[index+1:], "omitempty") != -1 && isEmptyValue(v) {
+			if strings.Contains(tagValue[index+1:], "omitempty") && isEmptyValue(v) {
 				continue
 			}
 
@@ -1024,7 +1024,7 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 					return fmt.Errorf("cannot squash non-struct type '%s'", v.Type())
 				}
 			} else {
-				if strings.Index(tagValue[index+1:], "remain") != -1 {
+				if strings.Contains(tagValue[index+1:], "remain") {
 					if v.Kind() != reflect.Map {
 						return fmt.Errorf("error remain-tag field with invalid type: '%s'", v.Type())
 					}
@@ -1430,13 +1430,32 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 		field, fieldValue := f.field, f.val
 		fieldName := field.Name
 
-		tagValue := field.Tag.Get(d.config.TagName)
-		if tagValue == "" && d.config.IgnoreUntaggedFields {
-			continue
+		// Try each tag name in order until we find a match
+		tagNames := strings.Split(d.config.TagName, ",")
+		foundTag := false
+		for _, tagName := range tagNames {
+			tagName = strings.TrimSpace(tagName)
+			if tagName == "" {
+				continue
+			}
+
+			tagValue := field.Tag.Get(tagName)
+			if tagValue == "" {
+				continue
+			}
+
+			// Found a tag value, use it
+			tagValue = strings.SplitN(tagValue, ",", 2)[0]
+			if tagValue != "" {
+				fieldName = tagValue
+				foundTag = true
+				break
+			}
 		}
-		tagValue = strings.SplitN(tagValue, ",", 2)[0]
-		if tagValue != "" {
-			fieldName = tagValue
+
+		// Skip if no tag found and ignoring untagged fields
+		if !foundTag && d.config.IgnoreUntaggedFields {
+			continue
 		}
 
 		rawMapKey := reflect.ValueOf(fieldName)
