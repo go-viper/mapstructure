@@ -161,6 +161,24 @@ func StringToSliceHookFunc(sep string) DecodeHookFunc {
 	}
 }
 
+func LegacyStringToSliceHookFunc(sep string) DecodeHookFunc {
+	return func(
+		f reflect.Kind,
+		t reflect.Kind,
+		data interface{}) (interface{}, error) {
+		if f != reflect.String || t != reflect.Slice {
+			return data, nil
+		}
+
+		raw := data.(string)
+		if raw == "" {
+			return []string{}, nil
+		}
+
+		return strings.Split(raw, sep), nil
+	}
+}
+
 // StringToTimeDurationHookFunc returns a DecodeHookFunc that converts
 // strings to time.Duration.
 func StringToTimeDurationHookFunc() DecodeHookFunc {
