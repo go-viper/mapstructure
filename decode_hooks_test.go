@@ -289,6 +289,46 @@ func TestStringToSliceHookFunc(t *testing.T) {
 	}
 }
 
+func TestLegacyStringToSliceHookFunc(t *testing.T) {
+	f := LegacyStringToSliceHookFunc(",")
+
+	strValue := reflect.ValueOf("42")
+	sliceValue := reflect.ValueOf([]string{"42"})
+	cases := []struct {
+		f, t   reflect.Value
+		result interface{}
+		err    bool
+	}{
+		{sliceValue, sliceValue, []string{"42"}, false},
+		{reflect.ValueOf([]byte("42")), reflect.ValueOf([]byte{}), []byte("42"), false},
+		{strValue, strValue, "42", false},
+		{
+			reflect.ValueOf("foo,bar,baz"),
+			sliceValue,
+			[]string{"foo", "bar", "baz"},
+			false,
+		},
+		{
+			reflect.ValueOf(""),
+			sliceValue,
+			[]string{},
+			false,
+		},
+	}
+
+	for i, tc := range cases {
+		actual, err := DecodeHookExec(f, tc.f, tc.t)
+		if tc.err != (err != nil) {
+			t.Fatalf("case %d: expected err %#v", i, tc.err)
+		}
+		if !reflect.DeepEqual(actual, tc.result) {
+			t.Fatalf(
+				"case %d: expected %#v, got %#v",
+				i, tc.result, actual)
+		}
+	}
+}
+
 func TestStringToTimeDurationHookFunc(t *testing.T) {
 	f := StringToTimeDurationHookFunc()
 
