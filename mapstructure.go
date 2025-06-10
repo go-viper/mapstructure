@@ -243,6 +243,12 @@ type DecoderConfig struct {
 	// will affect all nested structs as well.
 	ErrorUnset bool
 
+	// AllowUnsetPointer, if set to true, will prevent fields with pointer types
+	// from being reported as unset, even if ErrorUnset is true and the field was
+	// not present in the input data. This allows pointer fields to be optional
+	// without triggering an error when they are missing.
+	AllowUnsetPointer bool
+
 	// ZeroFields, if set to true, will zero fields before writing them.
 	// For example, a map will be emptied before decoded values are put in
 	// it. If this is false, a map will be merged.
@@ -1487,7 +1493,9 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 			if !rawMapVal.IsValid() {
 				// There was no matching key in the map for the value in
 				// the struct. Remember it for potential errors and metadata.
-				targetValKeysUnused[fieldName] = struct{}{}
+				if !(d.config.AllowUnsetPointer && fieldValue.Kind() == reflect.Ptr) {
+					targetValKeysUnused[fieldName] = struct{}{}
+				}
 				continue
 			}
 		}
