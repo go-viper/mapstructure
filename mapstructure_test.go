@@ -2604,8 +2604,11 @@ func TestInvalidType(t *testing.T) {
 
 	errs := derr.Unwrap()
 
-	if errs[0].Error() != "'Vstring' expected type 'string', got unconvertible type 'int', value: '42'" {
+	var decoderErr *DecodeError
+	if !errors.As(errs[0], &decoderErr) {
 		t.Errorf("got unexpected error: %s", err)
+	} else if errors.Is(decoderErr.Unwrap(), &UnconvertibleTypeError{}) {
+		t.Errorf("error should be UnconvertibleTypeError, got: %s", decoderErr.Unwrap())
 	}
 
 	inputNegIntUint := map[string]interface{}{
@@ -2623,8 +2626,10 @@ func TestInvalidType(t *testing.T) {
 
 	errs = derr.Unwrap()
 
-	if errs[0].Error() != "cannot parse 'Vuint', -42 overflows uint" {
+	if !errors.As(errs[0], &decoderErr) {
 		t.Errorf("got unexpected error: %s", err)
+	} else if errors.Is(decoderErr.Unwrap(), &ParseError{}) {
+		t.Errorf("error should be ParseError, got: %s", decoderErr.Unwrap())
 	}
 
 	inputNegFloatUint := map[string]interface{}{
@@ -2642,7 +2647,7 @@ func TestInvalidType(t *testing.T) {
 
 	errs = derr.Unwrap()
 
-	if errs[0].Error() != "cannot parse 'Vuint', -42.000000 overflows uint" {
+	if !errors.As(errs[0], &decoderErr) {
 		t.Errorf("got unexpected error: %s", err)
 	}
 }
