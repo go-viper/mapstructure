@@ -893,6 +893,29 @@ func TestDecode_EmbeddedPointerSquash_FromMapToStruct(t *testing.T) {
 	}
 }
 
+func TestDecode_EmbeddedPointerSquash_WithoutPreInitializedStructs_FromMapToStruct(t *testing.T) {
+	t.Parallel()
+
+	input := map[string]interface{}{
+		"Vstring": "foo",
+		"Vunique": "bar",
+	}
+
+	result := EmbeddedPointerSquash{}
+	err := Decode(input, &result)
+	if err != nil {
+		t.Fatalf("got an err: %s", err.Error())
+	}
+
+	if result.Vstring != "foo" {
+		t.Errorf("vstring value should be 'foo': %#v", result.Vstring)
+	}
+
+	if result.Vunique != "bar" {
+		t.Errorf("vunique value should be 'bar': %#v", result.Vunique)
+	}
+}
+
 func TestDecode_EmbeddedPointerSquashWithNestedMapstructure_FromStructToMap(t *testing.T) {
 	t.Parallel()
 
