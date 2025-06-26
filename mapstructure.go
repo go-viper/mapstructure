@@ -1499,7 +1499,10 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 						}
 						structs = append(structs, fieldVal.Elem())
 					} else {
-						errs = append(errs, fmt.Errorf("%s: unsupported type for squashed pointer: %s", fieldType.Name, fieldVal.Type().Elem().Kind()))
+						errs = append(errs, newDecodeError(
+							name+"."+fieldType.Name,
+							fmt.Errorf("unsupported type for squashed pointer: %s", fieldVal.Type().Elem().Kind()),
+						))
 					}
 				default:
 					errs = append(errs, newDecodeError(
