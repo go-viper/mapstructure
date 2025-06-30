@@ -1605,8 +1605,14 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 		}
 		sort.Strings(keys)
 
+		// Improve error message when name is empty by showing the target struct type
+		// in the case where it is empty for embedded structs.
+		errorName := name
+		if errorName == "" {
+			errorName = val.Type().String()
+		}
 		errs = append(errs, newDecodeError(
-			name,
+			errorName,
 			fmt.Errorf("has invalid keys: %s", strings.Join(keys, ", ")),
 		))
 	}
