@@ -3,10 +3,6 @@ package mapstructure
 import (
 	"encoding"
 	"errors"
-	"fmt"
-	"net"
-	"net/netip"
-	"net/url"
 	"reflect"
 	"strconv"
 	"strings"
@@ -187,23 +183,7 @@ func StringToWeakSliceHookFunc(sep string) DecodeHookFunc {
 // StringToTimeDurationHookFunc returns a DecodeHookFunc that converts
 // strings to time.Duration.
 func StringToTimeDurationHookFunc() DecodeHookFunc {
-	return func(
-		f reflect.Type,
-		t reflect.Type,
-		data any,
-	) (any, error) {
-		if f.Kind() != reflect.String {
-			return data, nil
-		}
-		if t != reflect.TypeOf(time.Duration(5)) {
-			return data, nil
-		}
-
-		// Convert it by parsing
-		d, err := time.ParseDuration(data.(string))
-
-		return d, wrapTimeParseDurationError(err)
-	}
+	return StringParserHookFunc(parseDuration)
 }
 
 // StringToTimeLocationHookFunc returns a DecodeHookFunc that converts
@@ -229,69 +209,19 @@ func StringToTimeLocationHookFunc() DecodeHookFunc {
 // StringToURLHookFunc returns a DecodeHookFunc that converts
 // strings to *url.URL.
 func StringToURLHookFunc() DecodeHookFunc {
-	return func(
-		f reflect.Type,
-		t reflect.Type,
-		data any,
-	) (any, error) {
-		if f.Kind() != reflect.String {
-			return data, nil
-		}
-		if t != reflect.TypeOf(&url.URL{}) {
-			return data, nil
-		}
-
-		// Convert it by parsing
-		u, err := url.Parse(data.(string))
-
-		return u, wrapUrlError(err)
-	}
+	return StringParserHookFunc(parseURL)
 }
 
 // StringToIPHookFunc returns a DecodeHookFunc that converts
 // strings to net.IP
 func StringToIPHookFunc() DecodeHookFunc {
-	return func(
-		f reflect.Type,
-		t reflect.Type,
-		data any,
-	) (any, error) {
-		if f.Kind() != reflect.String {
-			return data, nil
-		}
-		if t != reflect.TypeOf(net.IP{}) {
-			return data, nil
-		}
-
-		// Convert it by parsing
-		ip := net.ParseIP(data.(string))
-		if ip == nil {
-			return net.IP{}, fmt.Errorf("failed parsing ip")
-		}
-
-		return ip, nil
-	}
+	return StringParserHookFunc(parseIP)
 }
 
 // StringToIPNetHookFunc returns a DecodeHookFunc that converts
 // strings to net.IPNet
 func StringToIPNetHookFunc() DecodeHookFunc {
-	return func(
-		f reflect.Type,
-		t reflect.Type,
-		data any,
-	) (any, error) {
-		if f.Kind() != reflect.String {
-			return data, nil
-		}
-		if t != reflect.TypeOf(net.IPNet{}) {
-			return data, nil
-		}
-
-		// Convert it by parsing
-		_, net, err := net.ParseCIDR(data.(string))
-		return net, wrapNetParseError(err)
-	}
+	return StringParserHookFunc(parseIPNet)
 }
 
 // StringToTimeHookFunc returns a DecodeHookFunc that converts
@@ -402,67 +332,19 @@ func TextUnmarshallerHookFunc() DecodeHookFuncType {
 // StringToNetIPAddrHookFunc returns a DecodeHookFunc that converts
 // strings to netip.Addr.
 func StringToNetIPAddrHookFunc() DecodeHookFunc {
-	return func(
-		f reflect.Type,
-		t reflect.Type,
-		data any,
-	) (any, error) {
-		if f.Kind() != reflect.String {
-			return data, nil
-		}
-		if t != reflect.TypeOf(netip.Addr{}) {
-			return data, nil
-		}
-
-		// Convert it by parsing
-		addr, err := netip.ParseAddr(data.(string))
-
-		return addr, wrapNetIPParseAddrError(err)
-	}
+	return StringParserHookFunc(parseNetipAddr)
 }
 
 // StringToNetIPAddrPortHookFunc returns a DecodeHookFunc that converts
 // strings to netip.AddrPort.
 func StringToNetIPAddrPortHookFunc() DecodeHookFunc {
-	return func(
-		f reflect.Type,
-		t reflect.Type,
-		data any,
-	) (any, error) {
-		if f.Kind() != reflect.String {
-			return data, nil
-		}
-		if t != reflect.TypeOf(netip.AddrPort{}) {
-			return data, nil
-		}
-
-		// Convert it by parsing
-		addrPort, err := netip.ParseAddrPort(data.(string))
-
-		return addrPort, wrapNetIPParseAddrPortError(err)
-	}
+	return StringParserHookFunc(parseNetipAddrPort)
 }
 
 // StringToNetIPPrefixHookFunc returns a DecodeHookFunc that converts
 // strings to netip.Prefix.
 func StringToNetIPPrefixHookFunc() DecodeHookFunc {
-	return func(
-		f reflect.Type,
-		t reflect.Type,
-		data any,
-	) (any, error) {
-		if f.Kind() != reflect.String {
-			return data, nil
-		}
-		if t != reflect.TypeOf(netip.Prefix{}) {
-			return data, nil
-		}
-
-		// Convert it by parsing
-		prefix, err := netip.ParsePrefix(data.(string))
-
-		return prefix, wrapNetIPParsePrefixError(err)
-	}
+	return StringParserHookFunc(parseNetipPrefix)
 }
 
 // StringToBasicTypeHookFunc returns a DecodeHookFunc that converts
@@ -494,183 +376,79 @@ func StringToBasicTypeHookFunc() DecodeHookFunc {
 // StringToInt8HookFunc returns a DecodeHookFunc that converts
 // strings to int8.
 func StringToInt8HookFunc() DecodeHookFunc {
-	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
-		if f.Kind() != reflect.String || t.Kind() != reflect.Int8 {
-			return data, nil
-		}
-
-		// Convert it by parsing
-		i64, err := strconv.ParseInt(data.(string), 0, 8)
-		return int8(i64), wrapStrconvNumError(err)
-	}
+	return StringParserHookFunc(parseInt8)
 }
 
 // StringToUint8HookFunc returns a DecodeHookFunc that converts
 // strings to uint8.
 func StringToUint8HookFunc() DecodeHookFunc {
-	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
-		if f.Kind() != reflect.String || t.Kind() != reflect.Uint8 {
-			return data, nil
-		}
-
-		// Convert it by parsing
-		u64, err := strconv.ParseUint(data.(string), 0, 8)
-		return uint8(u64), wrapStrconvNumError(err)
-	}
+	return StringParserHookFunc(parseUint8)
 }
 
 // StringToInt16HookFunc returns a DecodeHookFunc that converts
 // strings to int16.
 func StringToInt16HookFunc() DecodeHookFunc {
-	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
-		if f.Kind() != reflect.String || t.Kind() != reflect.Int16 {
-			return data, nil
-		}
-
-		// Convert it by parsing
-		i64, err := strconv.ParseInt(data.(string), 0, 16)
-		return int16(i64), wrapStrconvNumError(err)
-	}
+	return StringParserHookFunc(parseInt16)
 }
 
 // StringToUint16HookFunc returns a DecodeHookFunc that converts
 // strings to uint16.
 func StringToUint16HookFunc() DecodeHookFunc {
-	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
-		if f.Kind() != reflect.String || t.Kind() != reflect.Uint16 {
-			return data, nil
-		}
-
-		// Convert it by parsing
-		u64, err := strconv.ParseUint(data.(string), 0, 16)
-		return uint16(u64), wrapStrconvNumError(err)
-	}
+	return StringParserHookFunc(parseUint16)
 }
 
 // StringToInt32HookFunc returns a DecodeHookFunc that converts
 // strings to int32.
 func StringToInt32HookFunc() DecodeHookFunc {
-	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
-		if f.Kind() != reflect.String || t.Kind() != reflect.Int32 {
-			return data, nil
-		}
-
-		// Convert it by parsing
-		i64, err := strconv.ParseInt(data.(string), 0, 32)
-		return int32(i64), wrapStrconvNumError(err)
-	}
+	return StringParserHookFunc(parseInt32)
 }
 
 // StringToUint32HookFunc returns a DecodeHookFunc that converts
 // strings to uint32.
 func StringToUint32HookFunc() DecodeHookFunc {
-	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
-		if f.Kind() != reflect.String || t.Kind() != reflect.Uint32 {
-			return data, nil
-		}
-
-		// Convert it by parsing
-		u64, err := strconv.ParseUint(data.(string), 0, 32)
-		return uint32(u64), wrapStrconvNumError(err)
-	}
+	return StringParserHookFunc(parseUint32)
 }
 
 // StringToInt64HookFunc returns a DecodeHookFunc that converts
 // strings to int64.
 func StringToInt64HookFunc() DecodeHookFunc {
-	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
-		if f.Kind() != reflect.String || t.Kind() != reflect.Int64 {
-			return data, nil
-		}
-
-		// Convert it by parsing
-		i64, err := strconv.ParseInt(data.(string), 0, 64)
-		return int64(i64), wrapStrconvNumError(err)
-	}
+	return StringParserHookFunc(parseInt64)
 }
 
 // StringToUint64HookFunc returns a DecodeHookFunc that converts
 // strings to uint64.
 func StringToUint64HookFunc() DecodeHookFunc {
-	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
-		if f.Kind() != reflect.String || t.Kind() != reflect.Uint64 {
-			return data, nil
-		}
-
-		// Convert it by parsing
-		u64, err := strconv.ParseUint(data.(string), 0, 64)
-		return uint64(u64), wrapStrconvNumError(err)
-	}
+	return StringParserHookFunc(parseUint64)
 }
 
 // StringToIntHookFunc returns a DecodeHookFunc that converts
 // strings to int.
 func StringToIntHookFunc() DecodeHookFunc {
-	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
-		if f.Kind() != reflect.String || t.Kind() != reflect.Int {
-			return data, nil
-		}
-
-		// Convert it by parsing
-		i64, err := strconv.ParseInt(data.(string), 0, 0)
-		return int(i64), wrapStrconvNumError(err)
-	}
+	return StringParserHookFunc(parseInt)
 }
 
 // StringToUintHookFunc returns a DecodeHookFunc that converts
 // strings to uint.
 func StringToUintHookFunc() DecodeHookFunc {
-	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
-		if f.Kind() != reflect.String || t.Kind() != reflect.Uint {
-			return data, nil
-		}
-
-		// Convert it by parsing
-		u64, err := strconv.ParseUint(data.(string), 0, 0)
-		return uint(u64), wrapStrconvNumError(err)
-	}
+	return StringParserHookFunc(parseUint)
 }
 
 // StringToFloat32HookFunc returns a DecodeHookFunc that converts
 // strings to float32.
 func StringToFloat32HookFunc() DecodeHookFunc {
-	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
-		if f.Kind() != reflect.String || t.Kind() != reflect.Float32 {
-			return data, nil
-		}
-
-		// Convert it by parsing
-		f64, err := strconv.ParseFloat(data.(string), 32)
-		return float32(f64), wrapStrconvNumError(err)
-	}
+	return StringParserHookFunc(parseFloat32)
 }
 
 // StringToFloat64HookFunc returns a DecodeHookFunc that converts
 // strings to float64.
 func StringToFloat64HookFunc() DecodeHookFunc {
-	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
-		if f.Kind() != reflect.String || t.Kind() != reflect.Float64 {
-			return data, nil
-		}
-
-		// Convert it by parsing
-		f64, err := strconv.ParseFloat(data.(string), 64)
-		return f64, wrapStrconvNumError(err)
-	}
+	return StringParserHookFunc(parseFloat64)
 }
 
 // StringToBoolHookFunc returns a DecodeHookFunc that converts
 // strings to bool.
 func StringToBoolHookFunc() DecodeHookFunc {
-	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
-		if f.Kind() != reflect.String || t.Kind() != reflect.Bool {
-			return data, nil
-		}
-
-		// Convert it by parsing
-		b, err := strconv.ParseBool(data.(string))
-		return b, wrapStrconvNumError(err)
-	}
+	return StringParserHookFunc(parseBool)
 }
 
 // StringToByteHookFunc returns a DecodeHookFunc that converts
@@ -688,27 +466,11 @@ func StringToRuneHookFunc() DecodeHookFunc {
 // StringToComplex64HookFunc returns a DecodeHookFunc that converts
 // strings to complex64.
 func StringToComplex64HookFunc() DecodeHookFunc {
-	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
-		if f.Kind() != reflect.String || t.Kind() != reflect.Complex64 {
-			return data, nil
-		}
-
-		// Convert it by parsing
-		c128, err := strconv.ParseComplex(data.(string), 64)
-		return complex64(c128), wrapStrconvNumError(err)
-	}
+	return StringParserHookFunc(parseComplex64)
 }
 
 // StringToComplex128HookFunc returns a DecodeHookFunc that converts
 // strings to complex128.
 func StringToComplex128HookFunc() DecodeHookFunc {
-	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
-		if f.Kind() != reflect.String || t.Kind() != reflect.Complex128 {
-			return data, nil
-		}
-
-		// Convert it by parsing
-		c128, err := strconv.ParseComplex(data.(string), 128)
-		return c128, wrapStrconvNumError(err)
-	}
+	return StringParserHookFunc(parseComplex128)
 }
