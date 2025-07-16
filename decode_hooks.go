@@ -717,10 +717,7 @@ func StringToComplex128HookFunc() DecodeHookFunc {
 // StringToMailAddressHookFunc returns a DecodeHookFunc that converts
 // strings to mail.Address.
 func StringToMailAddressHookFunc() DecodeHookFunc {
-	return func(
-		f reflect.Type,
-		t reflect.Type,
-		data interface{}) (interface{}, error) {
+	return func(f reflect.Type, t reflect.Type, data interface{}) (interface{}, error) {
 		if f.Kind() != reflect.String {
 			return data, nil
 		}
