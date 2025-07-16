@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/big"
 	"net"
+	"net/mail"
 	"net/netip"
 	"net/url"
 	"reflect"
@@ -2122,4 +2123,23 @@ func TestErrorLeakageDecodeHook(t *testing.T) {
 			t.Logf("case %d: got safe error: %v", i, err)
 		}
 	}
+}
+
+func TestStringToMailAddressHookFunc(t *testing.T) {
+	suite := decodeHookTestSuite[string, mail.Address]{
+		fn: StringToMailAddressHookFunc(),
+		ok: []decodeHookTestCase[string, mail.Address]{
+			{"Barry Gibbs <a-very-loooooooooooooongggggg-addresssssss@example.com>", mail.Address{Name: "Barry Gibbs", Address: "a-very-loooooooooooooongggggg-addresssssss@example.com"}},
+			{"Barry Gibbs <bg@example.com>", mail.Address{Name: "Barry Gibbs", Address: "bg@example.com"}},
+			{"bg@example.com", mail.Address{Address: "bg@example.com"}},
+		},
+		fail: []decodeHookFailureTestCase[string, mail.Address]{
+			{"Barry Gibbs"},                // no email
+			{"Barry Gibbs <>"},             // no email
+			{"Barry Gibbs <bg>"},           // invalid email
+			{"Barry Gibbs bg@example.com"}, // missing angle
+		},
+	}
+
+	suite.Run(t)
 }

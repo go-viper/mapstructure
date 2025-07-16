@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/mail"
 	"net/netip"
 	"net/url"
 	"reflect"
@@ -710,5 +711,27 @@ func StringToComplex128HookFunc() DecodeHookFunc {
 		// Convert it by parsing
 		c128, err := strconv.ParseComplex(data.(string), 128)
 		return c128, wrapStrconvNumError(err)
+	}
+}
+
+// StringToMailAddressHookFunc returns a DecodeHookFunc that converts
+// strings to mail.Address.
+func StringToMailAddressHookFunc() DecodeHookFunc {
+	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
+		if f.Kind() != reflect.String || t != reflect.TypeOf(mail.Address{}) {
+			return data, nil
+		}
+
+		// Convert it by parsing
+		addr, err := mail.ParseAddress(data.(string))
+		if err != nil {
+			return mail.Address{}, fmt.Errorf("failed parsing mail address %v: %w", data, err)
+		}
+
+		if addr == nil {
+			return mail.Address{}, fmt.Errorf("failed parsing mail address %v", data)
+		}
+
+		return *addr, nil
 	}
 }
