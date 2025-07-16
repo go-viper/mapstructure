@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/big"
 	"net"
+	"net/mail"
 	"net/netip"
 	"net/url"
 	"reflect"
@@ -2120,6 +2121,39 @@ func TestErrorLeakageDecodeHook(t *testing.T) {
 			t.Errorf("case %d: error contains input value\n\terr: %v\n\tinput: %v", i, err, strValue)
 		} else {
 			t.Logf("case %d: got safe error: %v", i, err)
+		}
+	}
+}
+
+func TestStringToMailAddressHookFunc(t *testing.T) {
+	strValue := reflect.ValueOf("bg@example.com")
+	mailAddressValue := reflect.ValueOf(mail.Address{})
+
+	cases := []struct {
+		f, t   reflect.Value
+		result any
+		err    bool
+	}{
+		{strValue, mailAddressValue, mail.Address{Address: "bg@example.com"}, false},
+		{strValue, strValue, "bg@example.com", false},
+		{reflect.ValueOf(strings.Repeat("bg@example.com", 3)), mailAddressValue, mail.Address{}, true},
+		{reflect.ValueOf("Barry Gibbs <bg@example.com>"), mailAddressValue, mail.Address{Name: "Barry Gibbs", Address: "bg@example.com"}, false},
+		{reflect.ValueOf("Barry Gibbs"), mailAddressValue, mail.Address{}, true},
+		{reflect.ValueOf("Barry Gibbs <>"), mailAddressValue, mail.Address{}, true},
+		{reflect.ValueOf("Barry Gibbs <bg>"), mailAddressValue, mail.Address{}, true},
+		{reflect.ValueOf("Barry Gibbs <a-very-loooooooooooooongggggg-addresssssss@example.com>"), mailAddressValue, mail.Address{Name: "Barry Gibbs", Address: "a-very-loooooooooooooongggggg-addresssssss@example.com"}, false},
+	}
+
+	for i, tc := range cases {
+		f := StringToMailAddressHookFunc()
+		actual, err := DecodeHookExec(f, tc.f, tc.t)
+		if tc.err != (err != nil) {
+			t.Fatalf("case %d: expected err %#v", i, err)
+		}
+		if !tc.err && !reflect.DeepEqual(actual, tc.result) {
+			t.Fatalf(
+				"case %d: expected %#v, got %#v",
+				i, tc.result, actual)
 		}
 	}
 }
