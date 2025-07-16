@@ -2126,34 +2126,20 @@ func TestErrorLeakageDecodeHook(t *testing.T) {
 }
 
 func TestStringToMailAddressHookFunc(t *testing.T) {
-	strValue := reflect.ValueOf("bg@example.com")
-	mailAddressValue := reflect.ValueOf(mail.Address{})
-
-	cases := []struct {
-		f, t   reflect.Value
-		result any
-		err    bool
-	}{
-		{strValue, mailAddressValue, mail.Address{Address: "bg@example.com"}, false},
-		{strValue, strValue, "bg@example.com", false},
-		{reflect.ValueOf(strings.Repeat("bg@example.com", 3)), mailAddressValue, mail.Address{}, true},
-		{reflect.ValueOf("Barry Gibbs <bg@example.com>"), mailAddressValue, mail.Address{Name: "Barry Gibbs", Address: "bg@example.com"}, false},
-		{reflect.ValueOf("Barry Gibbs"), mailAddressValue, mail.Address{}, true},
-		{reflect.ValueOf("Barry Gibbs <>"), mailAddressValue, mail.Address{}, true},
-		{reflect.ValueOf("Barry Gibbs <bg>"), mailAddressValue, mail.Address{}, true},
-		{reflect.ValueOf("Barry Gibbs <a-very-loooooooooooooongggggg-addresssssss@example.com>"), mailAddressValue, mail.Address{Name: "Barry Gibbs", Address: "a-very-loooooooooooooongggggg-addresssssss@example.com"}, false},
+	suite := decodeHookTestSuite[string, mail.Address]{
+		fn: StringToMailAddressHookFunc(),
+		ok: []decodeHookTestCase[string, mail.Address]{
+			{"Barry Gibbs <a-very-loooooooooooooongggggg-addresssssss@example.com>", mail.Address{Name: "Barry Gibbs", Address: "a-very-loooooooooooooongggggg-addresssssss@example.com"}},
+			{"Barry Gibbs <bg@example.com>", mail.Address{Name: "Barry Gibbs", Address: "bg@example.com"}},
+			{"bg@example.com", mail.Address{Address: "bg@example.com"}},
+		},
+		fail: []decodeHookFailureTestCase[string, mail.Address]{
+			{"Barry Gibbs"},                // no email
+			{"Barry Gibbs <>"},             // no email
+			{"Barry Gibbs <bg>"},           // invalid email
+			{"Barry Gibbs bg@example.com"}, // missing angle
+		},
 	}
 
-	for i, tc := range cases {
-		f := StringToMailAddressHookFunc()
-		actual, err := DecodeHookExec(f, tc.f, tc.t)
-		if tc.err != (err != nil) {
-			t.Fatalf("case %d: expected err %#v", i, err)
-		}
-		if !tc.err && !reflect.DeepEqual(actual, tc.result) {
-			t.Fatalf(
-				"case %d: expected %#v, got %#v",
-				i, tc.result, actual)
-		}
-	}
+	suite.Run(t)
 }
