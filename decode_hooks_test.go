@@ -126,6 +126,33 @@ func TestComposeDecodeHookFunc(t *testing.T) {
 	}
 }
 
+func TestComposeDecodeHookFuncNil(t *testing.T) {
+	f1 := func(
+		f reflect.Kind,
+		t reflect.Kind,
+		data any,
+	) (any, error) {
+		return data, nil
+	}
+
+	f2 := func(
+		f reflect.Kind,
+		t reflect.Kind,
+		data any,
+	) (any, error) {
+		return data, nil
+	}
+
+	f := ComposeDecodeHookFunc(f1, f2)
+
+	result, err := DecodeHookExec(
+		f, reflect.ValueOf(new(any)).Elem(), reflect.Value{})
+	if err != nil {
+		t.Fatalf("bad: %s", err)
+	}
+	_ = result
+}
+
 func TestComposeDecodeHookFunc_err(t *testing.T) {
 	f1 := func(reflect.Kind, reflect.Kind, any) (any, error) {
 		return nil, errors.New("foo")
