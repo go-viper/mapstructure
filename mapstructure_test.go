@@ -3570,8 +3570,8 @@ type TestDatabaseConfig struct {
 
 type TestServerConfig struct {
 	TestDatabaseConfig `mapstructure:",squash"`
-	AppName            string                   `mapstructure:"app_name"`
-	Debug              bool                     `mapstructure:"debug"`
+	AppName            string `mapstructure:"app_name"`
+	Debug              bool   `mapstructure:"debug"`
 }
 
 func TestDecoder_ErrorUnused_EmbeddedStruct_QualifiedTypeName(t *testing.T) {
