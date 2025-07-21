@@ -12,15 +12,15 @@ func TestDecode_NilValue(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		in         interface{}
-		target     interface{}
-		out        interface{}
+		in         any
+		target     any
+		out        any
 		metaKeys   []string
 		metaUnused []string
 	}{
 		{
 			"all nil",
-			&map[string]interface{}{
+			&map[string]any{
 				"vfoo":   nil,
 				"vother": nil,
 			},
@@ -31,7 +31,7 @@ func TestDecode_NilValue(t *testing.T) {
 		},
 		{
 			"partial nil",
-			&map[string]interface{}{
+			&map[string]any{
 				"vfoo":   "baz",
 				"vother": nil,
 			},
@@ -42,7 +42,7 @@ func TestDecode_NilValue(t *testing.T) {
 		},
 		{
 			"partial decode",
-			&map[string]interface{}{
+			&map[string]any{
 				"vother": nil,
 			},
 			&Map{Vfoo: "foo", Vother: map[string]string{"foo": "bar"}},
@@ -52,7 +52,7 @@ func TestDecode_NilValue(t *testing.T) {
 		},
 		{
 			"unused values",
-			&map[string]interface{}{
+			&map[string]any{
 				"vbar":   "bar",
 				"vfoo":   nil,
 				"vother": nil,
@@ -64,7 +64,7 @@ func TestDecode_NilValue(t *testing.T) {
 		},
 		{
 			"map interface all nil",
-			&map[interface{}]interface{}{
+			&map[any]any{
 				"vfoo":   nil,
 				"vother": nil,
 			},
@@ -75,7 +75,7 @@ func TestDecode_NilValue(t *testing.T) {
 		},
 		{
 			"map interface partial nil",
-			&map[interface{}]interface{}{
+			&map[any]any{
 				"vfoo":   "baz",
 				"vother": nil,
 			},
@@ -86,7 +86,7 @@ func TestDecode_NilValue(t *testing.T) {
 		},
 		{
 			"map interface partial decode",
-			&map[interface{}]interface{}{
+			&map[any]any{
 				"vother": nil,
 			},
 			&Map{Vfoo: "foo", Vother: map[string]string{"foo": "bar"}},
@@ -96,7 +96,7 @@ func TestDecode_NilValue(t *testing.T) {
 		},
 		{
 			"map interface unused values",
-			&map[interface{}]interface{}{
+			&map[any]any{
 				"vbar":   "bar",
 				"vfoo":   nil,
 				"vother": nil,
@@ -145,9 +145,9 @@ func TestDecode_NilValue(t *testing.T) {
 func TestNestedTypePointerWithDefaults(t *testing.T) {
 	t.Parallel()
 
-	input := map[string]interface{}{
+	input := map[string]any{
 		"vfoo": "foo",
-		"vbar": map[string]interface{}{
+		"vbar": map[string]any{
 			"vstring": "foo",
 			"vint":    42,
 			"vbool":   true,
@@ -200,13 +200,13 @@ type NestedSlice struct {
 func TestNestedTypeSliceWithDefaults(t *testing.T) {
 	t.Parallel()
 
-	input := map[string]interface{}{
+	input := map[string]any{
 		"vfoo": "foo",
-		"vbars": []map[string]interface{}{
+		"vbars": []map[string]any{
 			{"vstring": "foo", "vint": 42, "vbool": true},
 			{"vint": 42, "vbool": true},
 		},
-		"vempty": []map[string]interface{}{
+		"vempty": []map[string]any{
 			{"vstring": "foo", "vint": 42, "vbool": true},
 			{"vint": 42, "vbool": true},
 		},
@@ -240,9 +240,9 @@ func TestNestedTypeSliceWithDefaults(t *testing.T) {
 func TestNestedTypeWithDefaults(t *testing.T) {
 	t.Parallel()
 
-	input := map[string]interface{}{
+	input := map[string]any{
 		"vfoo": "foo",
-		"vbar": map[string]interface{}{
+		"vbar": map[string]any{
 			"vstring": "foo",
 			"vint":    42,
 			"vbool":   true,
@@ -293,7 +293,7 @@ func TestDecodeSliceToEmptySliceWOZeroing(t *testing.T) {
 		Vfoo []string
 	}
 
-	decode := func(m interface{}, rawVal interface{}) error {
+	decode := func(m any, rawVal any) error {
 		config := &DecoderConfig{
 			Metadata:   nil,
 			Result:     rawVal,
@@ -309,7 +309,7 @@ func TestDecodeSliceToEmptySliceWOZeroing(t *testing.T) {
 	}
 
 	{
-		input := map[string]interface{}{
+		input := map[string]any{
 			"vfoo": []string{"1"},
 		}
 
@@ -322,7 +322,7 @@ func TestDecodeSliceToEmptySliceWOZeroing(t *testing.T) {
 	}
 
 	{
-		input := map[string]interface{}{
+		input := map[string]any{
 			"vfoo": []string{"1"},
 		}
 
@@ -337,7 +337,7 @@ func TestDecodeSliceToEmptySliceWOZeroing(t *testing.T) {
 	}
 
 	{
-		input := map[string]interface{}{
+		input := map[string]any{
 			"vfoo": []string{"2", "3"},
 		}
 
@@ -361,7 +361,7 @@ func TestNextSquashMapstructure(t *testing.T) {
 			} `mapstructure:",squash"`
 		} `mapstructure:",squash"`
 	}{}
-	err := Decode(map[interface{}]interface{}{"foo": "baz"}, &data)
+	err := Decode(map[any]any{"foo": "baz"}, &data)
 	if err != nil {
 		t.Fatalf("should not error: %s", err)
 	}
@@ -393,7 +393,7 @@ func TestDecode_DecodeHookInterface(t *testing.T) {
 
 	testData := map[string]string{"test": "test"}
 
-	stringToPointerInterfaceDecodeHook := func(from, to reflect.Type, data interface{}) (interface{}, error) {
+	stringToPointerInterfaceDecodeHook := func(from, to reflect.Type, data any) (any, error) {
 		if from.Kind() != reflect.String {
 			return data, nil
 		}
@@ -406,7 +406,7 @@ func TestDecode_DecodeHookInterface(t *testing.T) {
 		return impl, nil
 	}
 
-	stringToValueInterfaceDecodeHook := func(from, to reflect.Type, data interface{}) (interface{}, error) {
+	stringToValueInterfaceDecodeHook := func(from, to reflect.Type, data any) (any, error) {
 		if from.Kind() != reflect.String {
 			return data, nil
 		}
@@ -463,7 +463,7 @@ func TestDecode_DecodeHookInterface(t *testing.T) {
 func TestDecodeBadDataTypeInSlice(t *testing.T) {
 	t.Parallel()
 
-	input := map[string]interface{}{
+	input := map[string]any{
 		"Toto": "titi",
 	}
 	result := []struct {
@@ -503,12 +503,12 @@ func TestDecodeIntermediateMapsSettable(t *testing.T) {
 	}
 
 	timePtrType := reflect.TypeOf((*time.Time)(nil))
-	mapStrInfType := reflect.TypeOf((map[string]interface{})(nil))
+	mapStrInfType := reflect.TypeOf((map[string]any)(nil))
 
 	var actual TsWrapper
 	decoder, err := NewDecoder(&DecoderConfig{
 		Result: &actual,
-		DecodeHook: func(from, to reflect.Type, data interface{}) (interface{}, error) {
+		DecodeHook: func(from, to reflect.Type, data any) (any, error) {
 			if from == timePtrType && to == mapStrInfType {
 				ts := data.(*time.Time)
 				nanos := ts.UnixNano()
@@ -516,7 +516,7 @@ func TestDecodeIntermediateMapsSettable(t *testing.T) {
 				seconds := nanos / 1000000000
 				nanos = nanos % 1000000000
 
-				return &map[string]interface{}{
+				return &map[string]any{
 					"Seconds": seconds,
 					"Nanos":   int32(nanos),
 				}, nil
@@ -539,7 +539,7 @@ func TestDecodeIntermediateMapsSettable(t *testing.T) {
 
 // GH-206: decodeInt throws an error for an empty string
 func TestDecode_weakEmptyStringToInt(t *testing.T) {
-	input := map[string]interface{}{
+	input := map[string]any{
 		"StringToInt":   "",
 		"StringToUint":  "",
 		"StringToBool":  "",
@@ -609,7 +609,7 @@ func TestMapOmitEmptyWithEmptyFieldnameInTag(t *testing.T) {
 	s := Struct{
 		Username: "Joe",
 	}
-	var m map[string]interface{}
+	var m map[string]any
 
 	if err := Decode(s, &m); err != nil {
 		t.Fatal(err)
@@ -631,7 +631,7 @@ type HasNonComparableType struct {
 func TestDecode_nonComparableType(t *testing.T) {
 	decodeTo := &HasNonComparableType{}
 	expected := [2][]byte{{1, 2}, {3, 4, 5}}
-	if err := Decode(map[string]interface{}{"NonComparableType": expected}, &decodeTo); err != nil {
+	if err := Decode(map[string]any{"NonComparableType": expected}, &decodeTo); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(expected, decodeTo.NonComparableType) {
@@ -654,13 +654,13 @@ func TestDecodeToMapWithMultipleIndirection(t *testing.T) {
 		ii := &i
 		iii := &ii
 
-		var actual map[string]interface{}
+		var actual map[string]any
 
 		if err := Decode(iii, &actual); err != nil {
 			t.Fatal(err)
 		}
 
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"foo": "bar",
 		}
 
@@ -670,7 +670,7 @@ func TestDecodeToMapWithMultipleIndirection(t *testing.T) {
 	})
 
 	t.Run("Map", func(t *testing.T) {
-		v := map[string]interface{}{
+		v := map[string]any{
 			"foo": "bar",
 		}
 
@@ -678,13 +678,13 @@ func TestDecodeToMapWithMultipleIndirection(t *testing.T) {
 		ii := &i
 		iii := &ii
 
-		var actual map[string]interface{}
+		var actual map[string]any
 
 		if err := Decode(iii, &actual); err != nil {
 			t.Fatal(err)
 		}
 
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"foo": "bar",
 		}
 
@@ -694,7 +694,7 @@ func TestDecodeToMapWithMultipleIndirection(t *testing.T) {
 	})
 
 	t.Run("Array", func(t *testing.T) {
-		v := [1]map[string]interface{}{
+		v := [1]map[string]any{
 			{
 				"foo": "bar",
 			},
@@ -704,13 +704,13 @@ func TestDecodeToMapWithMultipleIndirection(t *testing.T) {
 		ii := &i
 		iii := &ii
 
-		var actual map[string]interface{}
+		var actual map[string]any
 
 		if err := WeakDecode(iii, &actual); err != nil {
 			t.Fatal(err)
 		}
 
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"foo": "bar",
 		}
 
@@ -720,7 +720,7 @@ func TestDecodeToMapWithMultipleIndirection(t *testing.T) {
 	})
 
 	t.Run("Slice", func(t *testing.T) {
-		v := []map[string]interface{}{
+		v := []map[string]any{
 			{
 				"foo": "bar",
 			},
@@ -730,13 +730,13 @@ func TestDecodeToMapWithMultipleIndirection(t *testing.T) {
 		ii := &i
 		iii := &ii
 
-		var actual map[string]interface{}
+		var actual map[string]any
 
 		if err := WeakDecode(iii, &actual); err != nil {
 			t.Fatal(err)
 		}
 
-		expected := map[string]interface{}{
+		expected := map[string]any{
 			"foo": "bar",
 		}
 
