@@ -3578,7 +3578,7 @@ func TestDecoder_ErrorUnused_EmbeddedStruct_QualifiedTypeName(t *testing.T) {
 	t.Parallel()
 
 	// Input with an invalid key that should cause an error
-	input := map[string]interface{}{
+	input := map[string]any{
 		"host":        "localhost",
 		"port":        5432,
 		"username":    "admin",
