@@ -3560,3 +3560,58 @@ func uintPtr(v uint) *uint        { return &v }
 func boolPtr(v bool) *bool        { return &v }
 func floatPtr(v float64) *float64 { return &v }
 func interfacePtr(v any) *any     { return &v }
+
+// Test struct for embedded error message testing
+type TestDatabaseConfig struct {
+	Host     string `mapstructure:"host"`
+	Port     int    `mapstructure:"port"`
+	Username string `mapstructure:"username"`
+}
+
+type TestServerConfig struct {
+	TestDatabaseConfig `mapstructure:",squash"`
+	AppName            string `mapstructure:"app_name"`
+	Debug              bool   `mapstructure:"debug"`
+}
+
+func TestDecoder_ErrorUnused_EmbeddedStruct_QualifiedTypeName(t *testing.T) {
+	t.Parallel()
+
+	// Input with an invalid key that should cause an error
+	input := map[string]any{
+		"host":        "localhost",
+		"port":        5432,
+		"username":    "admin",
+		"app_name":    "myapp",
+		"debug":       true,
+		"invalid_key": "this should cause an error", // This key doesn't exist in the struct
+	}
+
+	var config TestServerConfig
+
+	decoder, err := NewDecoder(&DecoderConfig{
+		ErrorUnused: true, // Enable error on unused keys
+		Result:      &config,
+	})
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	err = decoder.Decode(input)
+	if err == nil {
+		t.Fatal("expected error due to unused keys")
+	}
+
+	errorMessage := err.Error()
+	t.Logf("Error message: %s", errorMessage)
+
+	// Check that the error message contains the qualified struct type name
+	if !strings.Contains(errorMessage, "'mapstructure.TestServerConfig'") {
+		t.Errorf("Expected error message to contain qualified struct type 'mapstructure.TestServerConfig', got: %s", errorMessage)
+	}
+
+	// Check that unused keys are mentioned
+	if !strings.Contains(errorMessage, "invalid_key") {
+		t.Errorf("Expected error message to contain 'invalid_key', got: %s", errorMessage)
+	}
+}
