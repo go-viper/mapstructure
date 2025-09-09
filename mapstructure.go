@@ -300,6 +300,10 @@ type DecoderConfig struct {
 	// defaults to "mapstructure"
 	TagName string
 
+	// RootName specifies the name to use for the root element in error messages. For example:
+	//   '<rootName>' has unset fields: <fieldName>
+	RootName string
+
 	// The option of the value in the tag that indicates a field should
 	// be squashed. This defaults to "squash".
 	SquashTagOption string
@@ -465,7 +469,7 @@ func NewDecoder(config *DecoderConfig) (*Decoder, error) {
 // Decode decodes the given raw interface to the target pointer specified
 // by the configuration.
 func (d *Decoder) Decode(input any) error {
-	err := d.decode("", input, reflect.ValueOf(d.config.Result).Elem())
+	err := d.decode(d.config.RootName, input, reflect.ValueOf(d.config.Result).Elem())
 
 	// Retain some of the original behavior when multiple errors ocurr
 	var joinedErr interface{ Unwrap() []error }
