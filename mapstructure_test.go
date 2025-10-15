@@ -3681,3 +3681,43 @@ func uintPtr(v uint) *uint        { return &v }
 func boolPtr(v bool) *bool        { return &v }
 func floatPtr(v float64) *float64 { return &v }
 func interfacePtr(v any) *any     { return &v }
+
+type TestMapFieldName struct {
+	HostName string
+	Username string
+}
+
+func TestDecoder_MapFieldName(t *testing.T) {
+	var structKeys map[string]any
+
+	decoder, err := NewDecoder(&DecoderConfig{
+		ErrorUnused: true, // Enable error on unused keys
+		Result:      &structKeys,
+		MapFieldName: func(s string) string {
+			if s == "HostName" {
+				return "host_name"
+			}
+			return s
+		},
+	})
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	var input TestMapFieldName
+
+	err = decoder.Decode(&input)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	_, ok := structKeys["host_name"]
+	if !ok {
+		t.Fatal("expected host_name to exist")
+	}
+
+	_, ok = structKeys["Username"]
+	if !ok {
+		t.Fatal("expected Username to exist")
+	}
+}
