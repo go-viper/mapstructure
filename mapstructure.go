@@ -218,6 +218,11 @@ type DecodeHookFuncKind func(reflect.Kind, reflect.Kind, any) (any, error)
 // values.
 type DecodeHookFuncValue func(from reflect.Value, to reflect.Value) (any, error)
 
+// ValidateHookFunc is the callback function that can be used for
+// post-decoding transformations. See "ValidateHook" in the DecoderConfig
+// struct.
+type ValidateHookFunc func(reflect.Value) error
+
 // DecoderConfig is the configuration that is used to create a new decoder
 // and allows customization of various aspects of decoding.
 type DecoderConfig struct {
@@ -231,6 +236,16 @@ type DecoderConfig struct {
 	//
 	// If an error is returned, the entire decode will fail with that error.
 	DecodeHook DecodeHookFunc
+
+	// ValidateHook, if set, will be called after decoding is complete.
+	// This is useful for types that need a finalization step or validation.
+	// The ValidateHook is called for every map and value in the input. This
+	// means that if a struct has embedded fields with squash tags the post
+	// decode hook is called only once with all of the input data, not once
+	// for each embedded struct.
+	//
+	// If an error is returned, the entire decode will fail with that error.
+	ValidateHook ValidateHookFunc
 
 	// If ErrorUnused is true, then it is an error for there to exist
 	// keys in the original map that were unused in the decoding process
@@ -576,6 +591,13 @@ func (d *Decoder) decode(name string, input any, outVal reflect.Value) error {
 	// mark the key as used if we're tracking metainput.
 	if addMetaKey && d.config.Metadata != nil && name != "" {
 		d.config.Metadata.Keys = append(d.config.Metadata.Keys, name)
+	}
+
+	// If we have a post-decode hook, then we call it now.
+	if d.config.ValidateHook != nil {
+		if err := d.config.ValidateHook(outVal); err != nil {
+			return fmt.Errorf("error validating '%s': %w", name, err)
+		}
 	}
 
 	return err
