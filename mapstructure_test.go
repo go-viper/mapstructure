@@ -446,6 +446,48 @@ func TestBasic_Merge(t *testing.T) {
 	}
 }
 
+func TestBasic_ZeroFields(t *testing.T) {
+	t.Parallel()
+
+	input := map[string]any{
+		"vint": 42,
+	}
+
+	// With ZeroFields: true, struct fields NOT in input should still be preserved
+	// This is different from maps/slices which get replaced
+	var result Basic
+	result.Vuint = 100
+	result.Vstring = "preserved"
+	result.Vbool = true
+
+	config := &DecoderConfig{
+		Result:     &result,
+		ZeroFields: true,
+	}
+
+	decoder, err := NewDecoder(config)
+	if err != nil {
+		t.Fatalf("failed to create decoder: %s", err)
+	}
+
+	err = decoder.Decode(input)
+	if err != nil {
+		t.Fatalf("got an err: %s", err)
+	}
+
+	// ZeroFields does NOT zero struct fields that aren't in the input
+	// Fields not in input (Vuint, Vstring, Vbool) should retain their values
+	expected := Basic{
+		Vint:    42,       // From input
+		Vuint:   100,      // Preserved (not in input)
+		Vstring: "preserved", // Preserved (not in input)
+		Vbool:   true,     // Preserved (not in input)
+	}
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("ZeroFields should not affect struct fields not in input\ngot:  %#v\nwant: %#v", result, expected)
+	}
+}
+
 // Test for issue #46.
 func TestBasic_Struct(t *testing.T) {
 	t.Parallel()
@@ -1810,6 +1852,57 @@ func TestMapMerge(t *testing.T) {
 	}
 }
 
+// Test that ZeroFields option will create a new map
+func TestMapZeroFields(t *testing.T) {
+	t.Parallel()
+
+	input := map[string]any{
+		"vfoo": "foo",
+		"vother": map[any]any{
+			"foo": "foo",
+			"bar": "bar",
+		},
+	}
+
+	// With ZeroFields: true, existing map values should be replaced, not merged
+	var result Map
+	result.Vother = map[string]string{"hello": "world"}
+
+	config := &DecoderConfig{
+		Result:     &result,
+		ZeroFields: true,
+	}
+
+	decoder, err := NewDecoder(config)
+	if err != nil {
+		t.Fatalf("failed to create decoder: %s", err)
+	}
+
+	err = decoder.Decode(input)
+	if err != nil {
+		t.Fatalf("got an error: %s", err)
+	}
+
+	if result.Vfoo != "foo" {
+		t.Errorf("vfoo value should be 'foo': %#v", result.Vfoo)
+	}
+
+	// With ZeroFields, the map should be replaced, not merged
+	// So "hello" should NOT be present
+	expected := map[string]string{
+		"foo": "foo",
+		"bar": "bar",
+	}
+	if !reflect.DeepEqual(result.Vother, expected) {
+		t.Errorf("expected map to be replaced (not merged), got: %#v, expected: %#v", result.Vother, expected)
+	}
+
+	// Verify "hello" is NOT in the result
+	if _, exists := result.Vother["hello"]; exists {
+		t.Errorf("ZeroFields should replace map, but 'hello' key from original map still exists")
+	}
+}
+
 func TestMapOfStruct(t *testing.T) {
 	t.Parallel()
 
@@ -2033,6 +2126,52 @@ func TestInvalidSlice(t *testing.T) {
 	err := Decode(input, &result)
 	if err == nil {
 		t.Errorf("expected failure")
+	}
+}
+
+// Test that ZeroFields option will create a new slice
+func TestSliceZeroFields(t *testing.T) {
+	t.Parallel()
+
+	input := map[string]any{
+		"vfoo": "foo",
+		"vbar": []string{"new1", "new2"},
+	}
+
+	// With ZeroFields: true, existing slice should be replaced, not appended
+	result := Slice{
+		Vfoo: "initial",
+		Vbar: []string{"existing1", "existing2", "existing3"},
+	}
+
+	config := &DecoderConfig{
+		Result:     &result,
+		ZeroFields: true,
+	}
+
+	decoder, err := NewDecoder(config)
+	if err != nil {
+		t.Fatalf("failed to create decoder: %s", err)
+	}
+
+	err = decoder.Decode(input)
+	if err != nil {
+		t.Fatalf("got an error: %s", err)
+	}
+
+	if result.Vfoo != "foo" {
+		t.Errorf("vfoo value should be 'foo': %#v", result.Vfoo)
+	}
+
+	// With ZeroFields, the slice should be replaced, not appended/merged
+	// Should only have the 2 new elements, not the 3 existing ones
+	expected := []string{"new1", "new2"}
+	if !reflect.DeepEqual(result.Vbar, expected) {
+		t.Errorf("expected slice to be replaced (not merged), got: %#v, expected: %#v", result.Vbar, expected)
+	}
+
+	if len(result.Vbar) != 2 {
+		t.Errorf("ZeroFields should replace slice, expected length 2, got: %d", len(result.Vbar))
 	}
 }
 
