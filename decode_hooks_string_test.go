@@ -789,7 +789,7 @@ func TestStringToHookFuncEdgeCases(t *testing.T) {
 			hookFunc DecodeHookFunc
 			target   reflect.Value
 			input    string
-			expected interface{}
+			expected any
 		}{
 			{"int8", StringToHookFunc[int8](), reflect.ValueOf(int8(0)), "42", int8(42)},
 			{"uint8", StringToHookFunc[uint8](), reflect.ValueOf(uint8(0)), "42", uint8(42)},
