@@ -92,6 +92,11 @@ func ComposeDecodeHookFunc(fs ...DecodeHookFunc) DecodeHookFunc {
 	}
 	return func(f reflect.Value, t reflect.Value) (any, error) {
 		var err error
+
+		if f.Kind() == reflect.Interface && f.IsNil() {
+			return nil, nil
+		}
+
 		data := f.Interface()
 
 		newFrom := f
