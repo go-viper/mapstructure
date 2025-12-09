@@ -3577,13 +3577,6 @@ func testArrayInput(t *testing.T, input map[string]any, expected *Array) {
 	}
 }
 
-func stringPtr(v string) *string  { return &v }
-func intPtr(v int) *int           { return &v }
-func uintPtr(v uint) *uint        { return &v }
-func boolPtr(v bool) *bool        { return &v }
-func floatPtr(v float64) *float64 { return &v }
-func interfacePtr(v any) *any     { return &v }
-
 // Test struct for embedded error message testing
 type TestDatabaseConfig struct {
 	Host     string `mapstructure:"host"`
@@ -3638,3 +3631,52 @@ func TestDecoder_ErrorUnused_EmbeddedStruct_QualifiedTypeName(t *testing.T) {
 		t.Errorf("Expected error message to contain 'invalid_key', got: %s", errorMessage)
 	}
 }
+func TestDecode_structArrayDeepMap(t *testing.T) {
+	type SourceChild struct {
+		String string `mapstructure:"some-string"`
+	}
+
+	type SourceParent struct {
+		ChildrenA []SourceChild  `mapstructure:"children-a,deep"`
+		ChildrenB *[]SourceChild `mapstructure:"children-b,deep"`
+	}
+
+	var target map[string]interface{}
+
+	source := SourceParent{
+		ChildrenA: []SourceChild{
+			{String: "one"},
+			{String: "two"},
+		},
+		ChildrenB: &[]SourceChild{
+			{String: "one"},
+			{String: "two"},
+		},
+	}
+
+	if err := Decode(source, &target); err != nil {
+		t.Fatalf("got error: %s", err)
+	}
+
+	expected := map[string]interface{}{
+		"children-a": []map[string]interface{}{
+			{"some-string": "one"},
+			{"some-string": "two"},
+		},
+		"children-b": []map[string]interface{}{
+			{"some-string": "one"},
+			{"some-string": "two"},
+		},
+	}
+
+	if !reflect.DeepEqual(target, expected) {
+		t.Fatalf("failed: \nexpected: %#v\nresult: %#v", expected, target)
+	}
+}
+
+func stringPtr(v string) *string              { return &v }
+func intPtr(v int) *int                       { return &v }
+func uintPtr(v uint) *uint                    { return &v }
+func boolPtr(v bool) *bool                    { return &v }
+func floatPtr(v float64) *float64             { return &v }
+func interfacePtr(v interface{}) *interface{} { return &v }
