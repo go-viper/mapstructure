@@ -897,7 +897,7 @@ func TestDecode_EmbeddedPointerSquash_FromMapToStruct(t *testing.T) {
 func TestDecode_EmbeddedPointerSquash_WithoutPreInitializedStructs_FromMapToStruct(t *testing.T) {
 	t.Parallel()
 
-	input := map[string]interface{}{
+	input := map[string]any{
 		"Vstring": "foo",
 		"Vunique": "bar",
 	}
@@ -3631,6 +3631,7 @@ func TestDecoder_ErrorUnused_EmbeddedStruct_QualifiedTypeName(t *testing.T) {
 		t.Errorf("Expected error message to contain 'invalid_key', got: %s", errorMessage)
 	}
 }
+
 func TestDecode_structArrayDeepMap(t *testing.T) {
 	type SourceChild struct {
 		String string `mapstructure:"some-string"`
@@ -3641,7 +3642,7 @@ func TestDecode_structArrayDeepMap(t *testing.T) {
 		ChildrenB *[]SourceChild `mapstructure:"children-b,deep"`
 	}
 
-	var target map[string]interface{}
+	var target map[string]any
 
 	source := SourceParent{
 		ChildrenA: []SourceChild{
@@ -3658,12 +3659,12 @@ func TestDecode_structArrayDeepMap(t *testing.T) {
 		t.Fatalf("got error: %s", err)
 	}
 
-	expected := map[string]interface{}{
-		"children-a": []map[string]interface{}{
+	expected := map[string]any{
+		"children-a": []map[string]any{
 			{"some-string": "one"},
 			{"some-string": "two"},
 		},
-		"children-b": []map[string]interface{}{
+		"children-b": []map[string]any{
 			{"some-string": "one"},
 			{"some-string": "two"},
 		},
@@ -3674,9 +3675,9 @@ func TestDecode_structArrayDeepMap(t *testing.T) {
 	}
 }
 
-func stringPtr(v string) *string              { return &v }
-func intPtr(v int) *int                       { return &v }
-func uintPtr(v uint) *uint                    { return &v }
-func boolPtr(v bool) *bool                    { return &v }
-func floatPtr(v float64) *float64             { return &v }
-func interfacePtr(v interface{}) *interface{} { return &v }
+func stringPtr(v string) *string  { return &v }
+func intPtr(v int) *int           { return &v }
+func uintPtr(v uint) *uint        { return &v }
+func boolPtr(v bool) *bool        { return &v }
+func floatPtr(v float64) *float64 { return &v }
+func interfacePtr(v any) *any     { return &v }

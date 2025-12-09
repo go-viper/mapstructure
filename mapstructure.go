@@ -1182,7 +1182,7 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 				var childType reflect.Type
 				switch v.Type().Elem().Kind() {
 				case reflect.Struct:
-					childType = reflect.TypeOf(map[string]interface{}{})
+					childType = reflect.TypeOf(map[string]any{})
 				default:
 					childType = v.Type().Elem()
 				}
@@ -1766,7 +1766,6 @@ func isStructTypeConvertibleToMap(typ reflect.Type, checkMapstructureTags bool, 
 }
 
 func dereferencePtrToStructIfNeeded(v reflect.Value, tagName string) reflect.Value {
-
 	if v.Kind() != reflect.Ptr {
 		return v
 	}
