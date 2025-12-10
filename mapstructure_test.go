@@ -3675,6 +3675,58 @@ func TestDecode_structArrayDeepMap(t *testing.T) {
 	}
 }
 
+func TestDecoder_RootName(t *testing.T) {
+	t.Parallel()
+
+	input := map[string]any{
+		"surname": "green",
+		"relation": map[string]any{
+			"surname": "black",
+		},
+	}
+
+	var result struct {
+		Name     string `mapstructure:"name"`
+		Relation struct {
+			Name string `mapstructure:"name"`
+		} `mapstructure:"relation"`
+	}
+
+	decoder, err := NewDecoder(&DecoderConfig{
+		ErrorUnset:  true,
+		ErrorUnused: true,
+		Result:      &result,
+		RootName:    "root",
+	})
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	err = decoder.Decode(input)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	expectedErrors := []string{
+		`'root.relation' has invalid keys: surname`,
+		`'root.relation' has unset fields: name`,
+		`'root' has invalid keys: surname`,
+		`'root' has unset fields: name`,
+	}
+
+	failed := false
+
+	for _, expectedErr := range expectedErrors {
+		if !strings.Contains(err.Error(), expectedErr) {
+			failed = true
+		}
+	}
+
+	if failed {
+		t.Errorf("unexpected error message, got: %s", err.Error())
+	}
+}
+
 func stringPtr(v string) *string  { return &v }
 func intPtr(v int) *int           { return &v }
 func uintPtr(v uint) *uint        { return &v }
