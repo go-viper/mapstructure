@@ -1593,6 +1593,8 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 		tagValue = strings.SplitN(tagValue, ",", 2)[0]
 		if tagValue != "" {
 			fieldName = tagValue
+		} else {
+			fieldName = d.config.MapFieldName(fieldName)
 		}
 
 		rawMapKey := reflect.ValueOf(fieldName)
