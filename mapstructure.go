@@ -316,6 +316,10 @@ type DecoderConfig struct {
 	// DecodeNil, if set to true, will cause the DecodeHook (if present) to run
 	// even if the input is nil. This can be used to provide default values.
 	DecodeNil bool
+
+	// MapFieldName is the function used to convert the struct field name to the map's key name.
+	// This can be used to support snake casing, etc., without explicitly mapping each name.
+	MapFieldName func(string) string
 }
 
 // A Decoder takes a raw interface value and turns it into structured
@@ -450,6 +454,12 @@ func NewDecoder(config *DecoderConfig) (*Decoder, error) {
 
 	if config.MatchName == nil {
 		config.MatchName = strings.EqualFold
+	}
+
+	if config.MapFieldName == nil {
+		config.MapFieldName = func(s string) string {
+			return s
+		}
 	}
 
 	result := &Decoder{
@@ -1068,7 +1078,7 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 		}
 
 		tagValue := f.Tag.Get(d.config.TagName)
-		keyName := f.Name
+		keyName := d.config.MapFieldName(f.Name)
 
 		if tagValue == "" && d.config.IgnoreUntaggedFields {
 			continue
@@ -1583,6 +1593,8 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 		tagValue = strings.SplitN(tagValue, ",", 2)[0]
 		if tagValue != "" {
 			fieldName = tagValue
+		} else {
+			fieldName = d.config.MapFieldName(fieldName)
 		}
 
 		rawMapKey := reflect.ValueOf(fieldName)
