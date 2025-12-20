@@ -675,14 +675,29 @@ func (d *Decoder) decodeString(name string, data any, val reflect.Value) error {
 		case reflect.Uint8:
 			var uints []uint8
 			if dataKind == reflect.Array {
-				uints = make([]uint8, dataVal.Len(), dataVal.Len())
-				for i := range uints {
-					uints[i] = dataVal.Index(i).Interface().(uint8)
+				// 创建与数组长度相同的切片
+				uints = make([]uint8, dataVal.Len())
+				for i := 0; i < dataVal.Len(); i++ {
+					// 安全地转换每个元素，避免潜在的 panic
+					if elem := dataVal.Index(i); elem.Kind() == reflect.Uint8 {
+						uints[i] = uint8(elem.Uint())
+					} else {
+						// 如果元素类型不是 uint8，标记转换失败
+						converted = false
+						break
+					}
 				}
 			} else {
-				uints = dataVal.Interface().([]uint8)
+				// 对于切片，直接尝试类型转换
+				if slice, ok := dataVal.Interface().([]uint8); ok {
+					uints = slice
+				} else {
+					converted = false
+				}
 			}
-			val.SetString(string(uints))
+			if converted {
+				val.SetString(string(uints))
+			}
 		default:
 			converted = false
 		}
@@ -1067,7 +1082,7 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 			)
 		}
 
-		tagValue := f.Tag.Get(d.config.TagName)
+		tagValue, _ := getTagValue(f, d.config.TagName)
 		keyName := f.Name
 
 		if tagValue == "" && d.config.IgnoreUntaggedFields {
@@ -1088,12 +1103,12 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 				continue
 			}
 			// If "omitempty" is specified in the tag, it ignores empty values.
-			if strings.Index(tagValue[index+1:], "omitempty") != -1 && isEmptyValue(v) {
+			if strings.Contains(tagValue[index+1:], "omitempty") && isEmptyValue(v) {
 				continue
 			}
 
 			// If "omitzero" is specified in the tag, it ignores zero values.
-			if strings.Index(tagValue[index+1:], "omitzero") != -1 && v.IsZero() {
+			if strings.Contains(tagValue[index+1:], "omitzero") && v.IsZero() {
 				continue
 			}
 
@@ -1101,8 +1116,14 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 			squash = squash || strings.Contains(tagValue[index+1:], d.config.SquashTagOption)
 			if squash {
 				// When squashing, the embedded type can be a pointer to a struct.
-				if v.Kind() == reflect.Ptr && v.Elem().Kind() == reflect.Struct {
-					v = v.Elem()
+				if v.Kind() == reflect.Ptr {
+					if v.IsNil() {
+						// Nothing to squash; keep going without error.
+						continue
+					}
+					if v.Elem().Kind() == reflect.Struct {
+						v = v.Elem()
+					}
 				}
 
 				// The final type must be a struct
@@ -1113,7 +1134,7 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 					)
 				}
 			} else {
-				if strings.Index(tagValue[index+1:], "remain") != -1 {
+				if strings.Contains(tagValue[index+1:], "remain") {
 					if v.Kind() != reflect.Map {
 						return newDecodeError(
 							name+"."+f.Name,
@@ -1129,7 +1150,7 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 				}
 			}
 
-			deep = deep || strings.Index(tagValue[index+1:], "deep") != -1
+			deep = deep || strings.Contains(tagValue[index+1:], "deep")
 
 			if keyNameTagValue := tagValue[:index]; keyNameTagValue != "" {
 				keyName = keyNameTagValue
@@ -1507,19 +1528,20 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 		structType := structVal.Type()
 
 		for i := 0; i < structType.NumField(); i++ {
-			fieldType := structType.Field(i)
-			fieldVal := structVal.Field(i)
-			if fieldVal.Kind() == reflect.Ptr && fieldVal.Elem().Kind() == reflect.Struct {
-				// Handle embedded struct pointers as embedded structs.
-				fieldVal = fieldVal.Elem()
+				fieldType := structType.Field(i)
+				fieldVal := structVal.Field(i)
+
+				// If "squash" is specified in the tag, we squash the field down.
+				squash := d.config.Squash && fieldType.Anonymous &&
+					(fieldVal.Kind() == reflect.Struct ||
+						(fieldVal.Kind() == reflect.Ptr && fieldVal.Type().Elem().Kind() == reflect.Struct))
+				remain := false
+
+			// We always parse the tags because we're looking for other tags too.
+			tagParts := getTagParts(fieldType, d.config.TagName)
+			if len(tagParts) == 0 {
+				tagParts = []string{""}
 			}
-
-			// If "squash" is specified in the tag, we squash the field down.
-			squash := d.config.Squash && fieldVal.Kind() == reflect.Struct && fieldType.Anonymous
-			remain := false
-
-			// We always parse the tags cause we're looking for other tags too
-			tagParts := strings.Split(fieldType.Tag.Get(d.config.TagName), ",")
 			for _, tag := range tagParts[1:] {
 				if tag == d.config.SquashTagOption {
 					squash = true
@@ -1758,11 +1780,41 @@ func isStructTypeConvertibleToMap(typ reflect.Type, checkMapstructureTags bool, 
 		if f.PkgPath == "" && !checkMapstructureTags { // check for unexported fields
 			return true
 		}
-		if checkMapstructureTags && f.Tag.Get(tagName) != "" { // check for mapstructure tags inside
+		if checkMapstructureTags && hasAnyTag(f, tagName) { // check for mapstructure tags inside
 			return true
 		}
 	}
 	return false
+}
+
+// hasAnyTag checks whether field contains any non-empty value for given comma-separated tag names.
+func hasAnyTag(field reflect.StructField, tagName string) bool {
+	for _, name := range strings.Split(tagName, ",") {
+		if tag := field.Tag.Get(strings.TrimSpace(name)); tag != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// getTagParts returns the split tag parts for the first matching tag name.
+func getTagParts(field reflect.StructField, tagName string) []string {
+	for _, name := range strings.Split(tagName, ",") {
+		if tag := field.Tag.Get(strings.TrimSpace(name)); tag != "" {
+			return strings.Split(tag, ",")
+		}
+	}
+	return nil
+}
+
+// getTagValue returns the full tag value and whether it was found.
+func getTagValue(field reflect.StructField, tagName string) (string, bool) {
+	for _, name := range strings.Split(tagName, ",") {
+		if tag := field.Tag.Get(strings.TrimSpace(name)); tag != "" {
+			return tag, true
+		}
+	}
+	return "", false
 }
 
 func dereferencePtrToStructIfNeeded(v reflect.Value, tagName string) reflect.Value {
