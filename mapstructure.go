@@ -316,6 +316,10 @@ type DecoderConfig struct {
 	// DecodeNil, if set to true, will cause the DecodeHook (if present) to run
 	// even if the input is nil. This can be used to provide default values.
 	DecodeNil bool
+
+	// MergeIntoExisting, if set to true, will merge nested maps or struct with
+	// any already exsting structs or maps in the output.
+	MergeIntoExisting bool
 }
 
 // A Decoder takes a raw interface value and turns it into structured
@@ -1153,12 +1157,31 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 			mType := reflect.MapOf(vKeyType, vElemType)
 			vMap := reflect.MakeMap(mType)
 
-			// Creating a pointer to a map so that other methods can completely
-			// overwrite the map if need be (looking at you decodeMapFromMap). The
-			// indirection allows the underlying map to be settable (CanSet() == true)
-			// where as reflect.MakeMap returns an unsettable map.
-			addrVal := reflect.New(vMap.Type())
-			reflect.Indirect(addrVal).Set(vMap)
+			var addrVal reflect.Value
+			if d.config.MergeIntoExisting {
+				// Check if the map already contains a value for this field.
+				addrVal = valMap.MapIndex(reflect.ValueOf(keyName))
+				if addrVal.IsValid() {
+					// The map already contains a value. Pull it out into a modifiable value.
+					newAddrVal := reflect.New(addrVal.Type())
+					reflect.Indirect(newAddrVal).Set(addrVal)
+					addrVal = newAddrVal
+				} else {
+					// Creating a pointer to a map so that other methods can completely
+					// overwrite the map if need be (looking at you decodeMapFromMap). The
+					// indirection allows the underlying map to be settable (CanSet() == true)
+					// where as reflect.MakeMap returns an unsettable map.
+					addrVal = reflect.New(vMap.Type())
+					reflect.Indirect(addrVal).Set(vMap)
+				}
+			} else {
+				// Creating a pointer to a map so that other methods can completely
+				// overwrite the map if need be (looking at you decodeMapFromMap). The
+				// indirection allows the underlying map to be settable (CanSet() == true)
+				// where as reflect.MakeMap returns an unsettable map.
+				addrVal = reflect.New(vMap.Type())
+				reflect.Indirect(addrVal).Set(vMap)
+			}
 
 			err := d.decode(keyName, x.Interface(), reflect.Indirect(addrVal))
 			if err != nil {
