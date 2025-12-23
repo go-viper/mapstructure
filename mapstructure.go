@@ -345,6 +345,15 @@ type Metadata struct {
 	Unset []string
 }
 
+// Unmarshaler is an interface that when implemented allows downstream types
+// to customize their behavior when being unmarshaled from a document.
+//
+// Note that the types that implement this interface need to be addressable,
+// meaning they should be pointer or pointer-like values.
+type Unmarshaler interface {
+	UnmarshalMapstructure(interface{}) error
+}
+
 // Decode takes an input structure and uses reflection to translate it to
 // the output structure. output must be a pointer to a map or struct.
 func Decode(input any, output any) error {
@@ -530,6 +539,15 @@ func (d *Decoder) decode(name string, input any, outVal reflect.Value) error {
 			inputVal = reflect.ValueOf(sliceVal) // create nil slice pointer
 		default:
 			inputVal = reflect.Zero(outVal.Type())
+		}
+	}
+
+	if outVal.CanAddr() {
+		// if the output value can be addressed and implements the Unmarshaler
+		// interface, invoke the UnmarshalMapstructure method and return the
+		// error to the user.
+		if v, ok := outVal.Addr().Interface().(Unmarshaler); ok {
+			return v.UnmarshalMapstructure(input)
 		}
 	}
 
