@@ -173,6 +173,25 @@
 //	    Public: "I made it through!"
 //	}
 //
+// # Custom Decoding with Unmarshaler
+//
+// Types can implement the Unmarshaler interface to control their own decoding. The interface
+// behaves similarly to how UnmarshalJSON does in the standard library. It can be used as an
+// alternative or companion to a DecodeHook.
+//
+//	type TrimmedString string
+//
+//	func (t *TrimmedString) UnmarshalMapstructure(input any) error {
+//	    str, ok := input.(string)
+//	    if !ok {
+//	        return fmt.Errorf("expected string, got %T", input)
+//	    }
+//	    *t = TrimmedString(strings.TrimSpace(str))
+//	    return nil
+//	}
+//
+// See the Unmarshaler interface documentation for more details.
+//
 // # Other Configuration
 //
 // mapstructure is highly configurable. See the DecoderConfig struct
@@ -218,6 +237,46 @@ type DecodeHookFuncKind func(reflect.Kind, reflect.Kind, any) (any, error)
 // values.
 type DecodeHookFuncValue func(from reflect.Value, to reflect.Value) (any, error)
 
+// Unmarshaler is the interface implemented by types that can decode an input object for themselves.
+// This can be used in place of or in addition to a DecodeHook. The difference between an
+// Unmarshaler and DecodeHook is who is responsible for decoding: with the Unmarshaler interface a
+// type is responsible for decoding itself, whereas with a DecodeHook the Decoder is responsible for
+// decoding various types. A DecodeHook always runs before the Unmarshaler, allowing advanced use
+// cases where you wish to transform the input types prior to unmarshaling.
+//
+// The Unmarshaler should be implemented as a pointer receiver. However, to mimic the behavior of
+// UnmarshalJSON, a value receiver can also be used. These will not be able to modify the target
+// object, but could be used for advanced cases where the side effect of calling the unmarshaller is
+// useful.
+//
+// Like UnmarshalJSON, the Unmarshaler is never called for nil values. However you can still use
+// DecodeNil with a DecodeHook to convert nil's to a default value prior to unmarshaling.
+//
+// The omitzero and omitempty struct tag options are respected. If the input is zero or empty, the
+// unmarshaler will not be called and the value will remain unchanged.
+//
+// The ZeroFields option does not affect types with Unmarshaler. These types receive the existing
+// value and are responsible for managing their own fields. If zeroing is needed, the Unmarshaler
+// implementation must handle it explicitly.
+//
+// The ErrorUnused, ErrorUnset, and IgnoreUntaggedFields options don't affect unmarshaling, though
+// they still affect the containing object. The Unmarshaler can decide to return an error itself for
+// missing or unused input data. The philosophy is the Unmarshaler decides how it decodes, not the
+// Decoder.
+//
+// Similarly, the WeaklyTypedInput option has no affect on unmarshaling, as unmarshaling occurs
+// prior to any weak type inference. The Unmarshaler should implement its own relaxed type
+// conversions as desired.
+//
+// Unmarshaling is enabled by default. You may set the DisableUnmarshaler option to disable its use.
+// This allows you to circumvent types whose Unmarshaler implementation has bugs, or whose behavior
+// you don't want. In these case, use a DecodeHook instead to define your own custom decoding
+// behavior. You can also use a DecodeHook to call the Unmarshaler interface explicilty for a set of
+// allowed types.
+type Unmarshaler interface {
+	UnmarshalMapstructure(any) error
+}
+
 // DecoderConfig is the configuration that is used to create a new decoder
 // and allows customization of various aspects of decoding.
 type DecoderConfig struct {
@@ -249,9 +308,15 @@ type DecoderConfig struct {
 	// without triggering an error when they are missing.
 	AllowUnsetPointer bool
 
-	// ZeroFields, if set to true, will zero fields before writing them.
-	// For example, a map will be emptied before decoded values are put in
-	// it. If this is false, a map will be merged.
+	// ZeroFields, if set to true, will create new collections (maps, slices, arrays)
+	// instead of merging with existing values. For example, a map will be replaced
+	// with a new map containing only the decoded values. If this is false, new values
+	// will be merged into existing collections.
+	//
+	// Note: ZeroFields does NOT zero struct fields that are not present in the input.
+	// Struct fields not in the input retain their existing values. ZeroFields also has
+	// no effect on types implementing the Unmarshaler interface: these types receive
+	// the existing value and are responsible for managing their own state.
 	ZeroFields bool
 
 	// If WeaklyTypedInput is true, the decoder will make the following
@@ -316,6 +381,12 @@ type DecoderConfig struct {
 	// DecodeNil, if set to true, will cause the DecodeHook (if present) to run
 	// even if the input is nil. This can be used to provide default values.
 	DecodeNil bool
+
+	// DisableUnmarshaler, if set to true, will disable decoding via the Unmarshaler
+	// interface. You might use this to workaround types which have a buggy Unmarshaler
+	// implementation. In its place, you can use a DecodeHook, or even a DecodeHook
+	// which calls the Unmarshaler interface explicilty for a set of allowed types.
+	DisableUnmarshaler bool
 }
 
 // A Decoder takes a raw interface value and turns it into structured
@@ -547,36 +618,61 @@ func (d *Decoder) decode(name string, input any, outVal reflect.Value) error {
 
 	var err error
 	addMetaKey := true
-	switch outputKind {
-	case reflect.Bool:
-		err = d.decodeBool(name, input, outVal)
-	case reflect.Interface:
-		err = d.decodeBasic(name, input, outVal)
-	case reflect.String:
-		err = d.decodeString(name, input, outVal)
-	case reflect.Int:
-		err = d.decodeInt(name, input, outVal)
-	case reflect.Uint:
-		err = d.decodeUint(name, input, outVal)
-	case reflect.Float32:
-		err = d.decodeFloat(name, input, outVal)
-	case reflect.Complex64:
-		err = d.decodeComplex(name, input, outVal)
-	case reflect.Struct:
-		err = d.decodeStruct(name, input, outVal)
-	case reflect.Map:
-		err = d.decodeMap(name, input, outVal)
-	case reflect.Ptr:
-		addMetaKey, err = d.decodePtr(name, input, outVal)
-	case reflect.Slice:
-		err = d.decodeSlice(name, input, outVal)
-	case reflect.Array:
-		err = d.decodeArray(name, input, outVal)
-	case reflect.Func:
-		err = d.decodeFunc(name, input, outVal)
-	default:
-		// If we reached this point then we weren't able to decode it
-		return newDecodeError(name, fmt.Errorf("unsupported type: %s", outputKind))
+	unmarshaled := false
+
+	// Check if the type implements Unmarshaler interface
+	if !d.config.DisableUnmarshaler {
+		// Prefer checking for a pointer receiver, which is the idiomatic
+		// way to implement unmarshaling in Go.
+		if outVal.CanAddr() {
+			if unmarshaler, ok := outVal.Addr().Interface().(Unmarshaler); ok {
+				err = unmarshaler.UnmarshalMapstructure(input)
+				unmarshaled = true
+			}
+		}
+
+		// If the pointer receiver wasn't found or used, fall back to
+		// checking the value receiver. Skip if the value is a nil pointer
+		if !unmarshaled && outVal.CanInterface() && (outVal.Kind() != reflect.Ptr || !outVal.IsNil()) {
+			if unmarshaler, ok := outVal.Interface().(Unmarshaler); ok {
+				err = unmarshaler.UnmarshalMapstructure(input)
+				unmarshaled = true
+			}
+		}
+	}
+
+	if !unmarshaled {
+		switch outputKind {
+		case reflect.Bool:
+			err = d.decodeBool(name, input, outVal)
+		case reflect.Interface:
+			err = d.decodeBasic(name, input, outVal)
+		case reflect.String:
+			err = d.decodeString(name, input, outVal)
+		case reflect.Int:
+			err = d.decodeInt(name, input, outVal)
+		case reflect.Uint:
+			err = d.decodeUint(name, input, outVal)
+		case reflect.Float32:
+			err = d.decodeFloat(name, input, outVal)
+		case reflect.Complex64:
+			err = d.decodeComplex(name, input, outVal)
+		case reflect.Struct:
+			err = d.decodeStruct(name, input, outVal)
+		case reflect.Map:
+			err = d.decodeMap(name, input, outVal)
+		case reflect.Ptr:
+			addMetaKey, err = d.decodePtr(name, input, outVal)
+		case reflect.Slice:
+			err = d.decodeSlice(name, input, outVal)
+		case reflect.Array:
+			err = d.decodeArray(name, input, outVal)
+		case reflect.Func:
+			err = d.decodeFunc(name, input, outVal)
+		default:
+			// If we reached this point then we weren't able to decode it
+			return newDecodeError(name, fmt.Errorf("unsupported type: %s", outputKind))
+		}
 	}
 
 	// If we reached here, then we successfully decoded SOMETHING, so
