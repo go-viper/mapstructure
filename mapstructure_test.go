@@ -3235,6 +3235,74 @@ func TestDecoder_IgnoreUntaggedFieldsWithStruct(t *testing.T) {
 	}
 }
 
+func TestDecoder_MultiTagInline(t *testing.T) {
+	type Inner struct {
+		A int `yaml:"a"`
+	}
+
+	type Wrap struct {
+		Inner `yaml:",inline"`
+	}
+
+	input := map[string]any{"a": 1}
+	var result Wrap
+
+	dec, err := NewDecoder(&DecoderConfig{
+		TagName:          "config,yaml",
+		SquashTagOption:  "inline",
+		WeaklyTypedInput: true,
+		Result:           &result,
+	})
+	if err != nil {
+		t.Fatalf("NewDecoder error: %v", err)
+	}
+
+	if err := dec.Decode(input); err != nil {
+		t.Fatalf("Decode error: %v", err)
+	}
+
+	if result.Inner.A != 1 {
+		t.Fatalf("expected inline field A=1, got %d", result.Inner.A)
+	}
+}
+
+func TestDecoder_MultiTagRemain(t *testing.T) {
+	type Wrap struct {
+		Known string         `yaml:"known"`
+		Extra map[string]any `yaml:",remain"`
+	}
+
+	input := map[string]any{
+		"known":  "ok",
+		"extra1": "v1",
+		"extra2": 2,
+	}
+	var result Wrap
+
+	dec, err := NewDecoder(&DecoderConfig{
+		TagName:          "config,yaml",
+		WeaklyTypedInput: true,
+		Result:           &result,
+	})
+	if err != nil {
+		t.Fatalf("NewDecoder error: %v", err)
+	}
+
+	if err := dec.Decode(input); err != nil {
+		t.Fatalf("Decode error: %v", err)
+	}
+
+	if result.Known != "ok" {
+		t.Fatalf("expected Known=ok, got %q", result.Known)
+	}
+	if result.Extra == nil || len(result.Extra) != 2 {
+		t.Fatalf("expected Extra to contain 2 items, got %v", result.Extra)
+	}
+	if result.Extra["extra1"] != "v1" {
+		t.Fatalf("expected extra1=v1, got %v", result.Extra["extra1"])
+	}
+}
+
 func TestDecoder_DecodeNilOption(t *testing.T) {
 	t.Parallel()
 

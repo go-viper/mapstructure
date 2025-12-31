@@ -675,7 +675,7 @@ func (d *Decoder) decodeString(name string, data any, val reflect.Value) error {
 		case reflect.Uint8:
 			var uints []uint8
 			if dataKind == reflect.Array {
-				uints = make([]uint8, dataVal.Len(), dataVal.Len())
+				uints = make([]uint8, dataVal.Len())
 				for i := range uints {
 					uints[i] = dataVal.Index(i).Interface().(uint8)
 				}
@@ -1067,7 +1067,7 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 			)
 		}
 
-		tagValue := f.Tag.Get(d.config.TagName)
+		tagValue, _ := getTagValue(f, d.config.TagName)
 		keyName := f.Name
 
 		if tagValue == "" && d.config.IgnoreUntaggedFields {
@@ -1088,12 +1088,12 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 				continue
 			}
 			// If "omitempty" is specified in the tag, it ignores empty values.
-			if strings.Index(tagValue[index+1:], "omitempty") != -1 && isEmptyValue(v) {
+			if strings.Contains(tagValue[index+1:], "omitempty") && isEmptyValue(v) {
 				continue
 			}
 
 			// If "omitzero" is specified in the tag, it ignores zero values.
-			if strings.Index(tagValue[index+1:], "omitzero") != -1 && v.IsZero() {
+			if strings.Contains(tagValue[index+1:], "omitzero") && v.IsZero() {
 				continue
 			}
 
@@ -1113,7 +1113,7 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 					)
 				}
 			} else {
-				if strings.Index(tagValue[index+1:], "remain") != -1 {
+				if strings.Contains(tagValue[index+1:], "remain") {
 					if v.Kind() != reflect.Map {
 						return newDecodeError(
 							name+"."+f.Name,
@@ -1129,7 +1129,7 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 				}
 			}
 
-			deep = deep || strings.Index(tagValue[index+1:], "deep") != -1
+			deep = deep || strings.Contains(tagValue[index+1:], "deep")
 
 			if keyNameTagValue := tagValue[:index]; keyNameTagValue != "" {
 				keyName = keyNameTagValue
@@ -1519,7 +1519,10 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 			remain := false
 
 			// We always parse the tags cause we're looking for other tags too
-			tagParts := strings.Split(fieldType.Tag.Get(d.config.TagName), ",")
+			tagParts := getTagParts(fieldType, d.config.TagName)
+			if len(tagParts) == 0 {
+				tagParts = []string{""}
+			}
 			for _, tag := range tagParts[1:] {
 				if tag == d.config.SquashTagOption {
 					squash = true
@@ -1576,7 +1579,7 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 		field, fieldValue := f.field, f.val
 		fieldName := field.Name
 
-		tagValue := field.Tag.Get(d.config.TagName)
+		tagValue, _ := getTagValue(field, d.config.TagName)
 		if tagValue == "" && d.config.IgnoreUntaggedFields {
 			continue
 		}
@@ -1758,7 +1761,7 @@ func isStructTypeConvertibleToMap(typ reflect.Type, checkMapstructureTags bool, 
 		if f.PkgPath == "" && !checkMapstructureTags { // check for unexported fields
 			return true
 		}
-		if checkMapstructureTags && f.Tag.Get(tagName) != "" { // check for mapstructure tags inside
+		if checkMapstructureTags && hasAnyTag(f, tagName) { // check for mapstructure tags inside
 			return true
 		}
 	}
@@ -1785,4 +1788,37 @@ func dereferencePtrToStructIfNeeded(v reflect.Value, tagName string) reflect.Val
 	default:
 		return v
 	}
+}
+
+func hasAnyTag(field reflect.StructField, tagName string) bool {
+	_, ok := getTagValue(field, tagName)
+	return ok
+}
+
+func getTagParts(field reflect.StructField, tagName string) []string {
+	tagValue, ok := getTagValue(field, tagName)
+	if !ok {
+		return nil
+	}
+	return strings.Split(tagValue, ",")
+}
+
+func getTagValue(field reflect.StructField, tagName string) (string, bool) {
+	for _, name := range splitTagNames(tagName) {
+		if tag := field.Tag.Get(name); tag != "" {
+			return tag, true
+		}
+	}
+	return "", false
+}
+
+func splitTagNames(tagName string) []string {
+	if tagName == "" {
+		return []string{"mapstructure"}
+	}
+	parts := strings.Split(tagName, ",")
+	for i, name := range parts {
+		parts[i] = strings.TrimSpace(name)
+	}
+	return parts
 }
