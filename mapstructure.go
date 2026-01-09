@@ -1580,8 +1580,8 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 		if tagValue == "" && d.config.IgnoreUntaggedFields {
 			continue
 		}
-		tagValue = strings.SplitN(tagValue, ",", 2)[0]
 		if tagValue != "" {
+			tagValue, _, _ = strings.Cut(tagValue, ",")
 			fieldName = tagValue
 		}
 
