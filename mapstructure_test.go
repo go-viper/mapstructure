@@ -478,10 +478,10 @@ func TestBasic_ZeroFields(t *testing.T) {
 	// ZeroFields does NOT zero struct fields that aren't in the input
 	// Fields not in input (Vuint, Vstring, Vbool) should retain their values
 	expected := Basic{
-		Vint:    42,       // From input
-		Vuint:   100,      // Preserved (not in input)
+		Vint:    42,          // From input
+		Vuint:   100,         // Preserved (not in input)
 		Vstring: "preserved", // Preserved (not in input)
-		Vbool:   true,     // Preserved (not in input)
+		Vbool:   true,        // Preserved (not in input)
 	}
 	if !reflect.DeepEqual(result, expected) {
 		t.Errorf("ZeroFields should not affect struct fields not in input\ngot:  %#v\nwant: %#v", result, expected)
