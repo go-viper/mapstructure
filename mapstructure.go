@@ -1220,6 +1220,21 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 			keyName = tagValue
 		}
 
+		if d.cachedDecodeHook != nil {
+			mapelem := reflect.New(valMap.Type().Elem()).Elem()
+
+			input, err := d.cachedDecodeHook(v, mapelem)
+			if err != nil {
+				return fmt.Errorf("error decoding '%s': %w", name, err)
+			}
+
+			if !reflect.DeepEqual(input, v.Interface()) {
+				valMap.SetMapIndex(reflect.ValueOf(keyName), reflect.ValueOf(input))
+
+				continue
+			}
+		}
+
 		switch v.Kind() {
 		// this is an embedded struct, so handle it differently
 		case reflect.Struct:

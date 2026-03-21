@@ -1002,6 +1002,65 @@ func TestStructToMapHookFuncTabled(t *testing.T) {
 	}
 }
 
+func TestNestedStructFieldTypeOverride(t *testing.T) {
+	type Struct struct {
+		Time time.Time `mapstructure:"time"`
+	}
+
+	input := Struct{
+		Time: time.Now(),
+	}
+
+	var actualNoHook map[string]any
+
+	d, err := NewDecoder(&DecoderConfig{Result: &actualNoHook})
+	if err != nil {
+		t.Fatalf("unexpected err %#v", err)
+	}
+
+	expectedNoHook := map[string]any{}
+
+	err = d.Decode(input)
+	if err != nil {
+		t.Fatalf("unexpected err %#v", err)
+	}
+
+	if !reflect.DeepEqual(expectedNoHook, actualNoHook["time"]) {
+		t.Fatalf("expected %#v, got %#v", expectedNoHook, actualNoHook["time"])
+	}
+
+	var actualHook map[string]any
+
+	d, err = NewDecoder(&DecoderConfig{
+		Result: &actualHook,
+		DecodeHook: func(from, to reflect.Type, data any) (any, error) {
+			if tm, ok := data.(time.Time); ok {
+				return tm.Format(time.RFC3339), nil
+			}
+
+			if tm, ok := data.(*time.Time); ok {
+				return tm.Format(time.RFC3339), nil
+			}
+
+			return data, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected err %#v", err)
+	}
+
+	expectedHook := input.Time.Format(time.RFC3339)
+
+	err = d.Decode(input)
+	if err != nil {
+		t.Fatalf("unexpected err %#v", err)
+	}
+
+	if !reflect.DeepEqual(expectedHook, actualHook["time"]) {
+		t.Fatalf("expected %#v, got %#v", expectedHook, actualHook["time"])
+	}
+}
+
 func TestTextUnmarshallerHookFunc(t *testing.T) {
 	type MyString string
 
