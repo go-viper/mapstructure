@@ -106,7 +106,7 @@ func DecodeHookExec(
 //
 // The composed funcs are called in order, with the result of the
 // previous transformation.
-func ComposeDecodeHookFunc(fs ...DecodeHookFunc) DecodeHookFunc {
+func ComposeDecodeHookFunc(fs ...DecodeHookFunc) DecodeHookFuncValue {
 	cached := make([]func(from reflect.Value, to reflect.Value) (any, error), 0, len(fs))
 	for _, f := range fs {
 		cached = append(cached, cachedDecodeHook(f))
@@ -137,7 +137,7 @@ func ComposeDecodeHookFunc(fs ...DecodeHookFunc) DecodeHookFunc {
 
 // OrComposeDecodeHookFunc executes all input hook functions until one of them returns no error. In that case its value is returned.
 // If all hooks return an error, OrComposeDecodeHookFunc returns an error concatenating all error messages.
-func OrComposeDecodeHookFunc(ff ...DecodeHookFunc) DecodeHookFunc {
+func OrComposeDecodeHookFunc(ff ...DecodeHookFunc) DecodeHookFuncValue {
 	cached := make([]func(from reflect.Value, to reflect.Value) (any, error), 0, len(ff))
 	for _, f := range ff {
 		cached = append(cached, cachedDecodeHook(f))
@@ -161,9 +161,9 @@ func OrComposeDecodeHookFunc(ff ...DecodeHookFunc) DecodeHookFunc {
 	}
 }
 
-// StringToSliceHookFunc returns a DecodeHookFunc that converts
+// StringToSliceHookFunc returns a DecodeHookFuncType that converts
 // string to []string by splitting on the given sep.
-func StringToSliceHookFunc(sep string) DecodeHookFunc {
+func StringToSliceHookFunc(sep string) DecodeHookFuncType {
 	return func(
 		f reflect.Type,
 		t reflect.Type,
@@ -189,7 +189,7 @@ func StringToSliceHookFunc(sep string) DecodeHookFunc {
 //
 // As of mapstructure v2.0.0 [StringToSliceHookFunc] checks if the return type is a string slice.
 // This function removes that check.
-func StringToWeakSliceHookFunc(sep string) DecodeHookFunc {
+func StringToWeakSliceHookFunc(sep string) DecodeHookFuncType {
 	return func(
 		f reflect.Type,
 		t reflect.Type,
@@ -208,9 +208,9 @@ func StringToWeakSliceHookFunc(sep string) DecodeHookFunc {
 	}
 }
 
-// StringToTimeDurationHookFunc returns a DecodeHookFunc that converts
+// StringToTimeDurationHookFunc returns a DecodeHookFuncType that converts
 // strings to time.Duration.
-func StringToTimeDurationHookFunc() DecodeHookFunc {
+func StringToTimeDurationHookFunc() DecodeHookFuncType {
 	return func(
 		f reflect.Type,
 		t reflect.Type,
@@ -230,9 +230,9 @@ func StringToTimeDurationHookFunc() DecodeHookFunc {
 	}
 }
 
-// StringToTimeLocationHookFunc returns a DecodeHookFunc that converts
+// StringToTimeLocationHookFunc returns a DecodeHookFuncType that converts
 // strings to *time.Location.
-func StringToTimeLocationHookFunc() DecodeHookFunc {
+func StringToTimeLocationHookFunc() DecodeHookFuncType {
 	return func(
 		f reflect.Type,
 		t reflect.Type,
@@ -250,9 +250,9 @@ func StringToTimeLocationHookFunc() DecodeHookFunc {
 	}
 }
 
-// StringToURLHookFunc returns a DecodeHookFunc that converts
+// StringToURLHookFunc returns a DecodeHookFuncType that converts
 // strings to *url.URL.
-func StringToURLHookFunc() DecodeHookFunc {
+func StringToURLHookFunc() DecodeHookFuncType {
 	return func(
 		f reflect.Type,
 		t reflect.Type,
@@ -272,9 +272,9 @@ func StringToURLHookFunc() DecodeHookFunc {
 	}
 }
 
-// StringToIPHookFunc returns a DecodeHookFunc that converts
+// StringToIPHookFunc returns a DecodeHookFuncType that converts
 // strings to net.IP
-func StringToIPHookFunc() DecodeHookFunc {
+func StringToIPHookFunc() DecodeHookFuncType {
 	return func(
 		f reflect.Type,
 		t reflect.Type,
@@ -297,9 +297,9 @@ func StringToIPHookFunc() DecodeHookFunc {
 	}
 }
 
-// StringToIPNetHookFunc returns a DecodeHookFunc that converts
+// StringToIPNetHookFunc returns a DecodeHookFuncType that converts
 // strings to net.IPNet
-func StringToIPNetHookFunc() DecodeHookFunc {
+func StringToIPNetHookFunc() DecodeHookFuncType {
 	return func(
 		f reflect.Type,
 		t reflect.Type,
@@ -318,9 +318,9 @@ func StringToIPNetHookFunc() DecodeHookFunc {
 	}
 }
 
-// StringToTimeHookFunc returns a DecodeHookFunc that converts
+// StringToTimeHookFunc returns a DecodeHookFuncType that converts
 // strings to time.Time.
-func StringToTimeHookFunc(layout string) DecodeHookFunc {
+func StringToTimeHookFunc(layout string) DecodeHookFuncType {
 	return func(
 		f reflect.Type,
 		t reflect.Type,
@@ -377,7 +377,7 @@ func WeaklyTypedHook(
 	return data, nil
 }
 
-func RecursiveStructToMapHookFunc() DecodeHookFunc {
+func RecursiveStructToMapHookFunc() DecodeHookFuncValue {
 	return func(f reflect.Value, t reflect.Value) (any, error) {
 		if f.Kind() != reflect.Struct {
 			return f.Interface(), nil
@@ -395,7 +395,7 @@ func RecursiveStructToMapHookFunc() DecodeHookFunc {
 	}
 }
 
-// TextUnmarshallerHookFunc returns a DecodeHookFunc that applies
+// TextUnmarshallerHookFunc returns a DecodeHookFuncType that applies
 // strings to the UnmarshalText function, when the target type
 // implements the encoding.TextUnmarshaler interface
 func TextUnmarshallerHookFunc() DecodeHookFuncType {
@@ -423,9 +423,9 @@ func TextUnmarshallerHookFunc() DecodeHookFuncType {
 	}
 }
 
-// StringToNetIPAddrHookFunc returns a DecodeHookFunc that converts
+// StringToNetIPAddrHookFunc returns a DecodeHookFuncType that converts
 // strings to netip.Addr.
-func StringToNetIPAddrHookFunc() DecodeHookFunc {
+func StringToNetIPAddrHookFunc() DecodeHookFuncType {
 	return func(
 		f reflect.Type,
 		t reflect.Type,
@@ -445,9 +445,9 @@ func StringToNetIPAddrHookFunc() DecodeHookFunc {
 	}
 }
 
-// StringToNetIPAddrPortHookFunc returns a DecodeHookFunc that converts
+// StringToNetIPAddrPortHookFunc returns a DecodeHookFuncType that converts
 // strings to netip.AddrPort.
-func StringToNetIPAddrPortHookFunc() DecodeHookFunc {
+func StringToNetIPAddrPortHookFunc() DecodeHookFuncType {
 	return func(
 		f reflect.Type,
 		t reflect.Type,
@@ -467,9 +467,9 @@ func StringToNetIPAddrPortHookFunc() DecodeHookFunc {
 	}
 }
 
-// StringToNetIPPrefixHookFunc returns a DecodeHookFunc that converts
+// StringToNetIPPrefixHookFunc returns a DecodeHookFuncType that converts
 // strings to netip.Prefix.
-func StringToNetIPPrefixHookFunc() DecodeHookFunc {
+func StringToNetIPPrefixHookFunc() DecodeHookFuncType {
 	return func(
 		f reflect.Type,
 		t reflect.Type,
@@ -489,10 +489,10 @@ func StringToNetIPPrefixHookFunc() DecodeHookFunc {
 	}
 }
 
-// StringToBasicTypeHookFunc returns a DecodeHookFunc that converts
+// StringToBasicTypeHookFunc returns a DecodeHookFuncValue that converts
 // strings to basic types.
 // int8, uint8, int16, uint16, int32, uint32, int64, uint64, int, uint, float32, float64, bool, byte, rune, complex64, complex128
-func StringToBasicTypeHookFunc() DecodeHookFunc {
+func StringToBasicTypeHookFunc() DecodeHookFuncValue {
 	return ComposeDecodeHookFunc(
 		StringToInt8HookFunc(),
 		StringToUint8HookFunc(),
@@ -515,9 +515,9 @@ func StringToBasicTypeHookFunc() DecodeHookFunc {
 	)
 }
 
-// StringToInt8HookFunc returns a DecodeHookFunc that converts
+// StringToInt8HookFunc returns a DecodeHookFuncType that converts
 // strings to int8.
-func StringToInt8HookFunc() DecodeHookFunc {
+func StringToInt8HookFunc() DecodeHookFuncType {
 	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
 		if f.Kind() != reflect.String || t.Kind() != reflect.Int8 {
 			return data, nil
@@ -529,9 +529,9 @@ func StringToInt8HookFunc() DecodeHookFunc {
 	}
 }
 
-// StringToUint8HookFunc returns a DecodeHookFunc that converts
+// StringToUint8HookFunc returns a DecodeHookFuncType that converts
 // strings to uint8.
-func StringToUint8HookFunc() DecodeHookFunc {
+func StringToUint8HookFunc() DecodeHookFuncType {
 	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
 		if f.Kind() != reflect.String || t.Kind() != reflect.Uint8 {
 			return data, nil
@@ -543,9 +543,9 @@ func StringToUint8HookFunc() DecodeHookFunc {
 	}
 }
 
-// StringToInt16HookFunc returns a DecodeHookFunc that converts
+// StringToInt16HookFunc returns a DecodeHookFuncType that converts
 // strings to int16.
-func StringToInt16HookFunc() DecodeHookFunc {
+func StringToInt16HookFunc() DecodeHookFuncType {
 	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
 		if f.Kind() != reflect.String || t.Kind() != reflect.Int16 {
 			return data, nil
@@ -557,9 +557,9 @@ func StringToInt16HookFunc() DecodeHookFunc {
 	}
 }
 
-// StringToUint16HookFunc returns a DecodeHookFunc that converts
+// StringToUint16HookFunc returns a DecodeHookFuncType that converts
 // strings to uint16.
-func StringToUint16HookFunc() DecodeHookFunc {
+func StringToUint16HookFunc() DecodeHookFuncType {
 	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
 		if f.Kind() != reflect.String || t.Kind() != reflect.Uint16 {
 			return data, nil
@@ -571,9 +571,9 @@ func StringToUint16HookFunc() DecodeHookFunc {
 	}
 }
 
-// StringToInt32HookFunc returns a DecodeHookFunc that converts
+// StringToInt32HookFunc returns a DecodeHookFuncType that converts
 // strings to int32.
-func StringToInt32HookFunc() DecodeHookFunc {
+func StringToInt32HookFunc() DecodeHookFuncType {
 	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
 		if f.Kind() != reflect.String || t.Kind() != reflect.Int32 {
 			return data, nil
@@ -585,9 +585,9 @@ func StringToInt32HookFunc() DecodeHookFunc {
 	}
 }
 
-// StringToUint32HookFunc returns a DecodeHookFunc that converts
+// StringToUint32HookFunc returns a DecodeHookFuncType that converts
 // strings to uint32.
-func StringToUint32HookFunc() DecodeHookFunc {
+func StringToUint32HookFunc() DecodeHookFuncType {
 	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
 		if f.Kind() != reflect.String || t.Kind() != reflect.Uint32 {
 			return data, nil
@@ -599,9 +599,9 @@ func StringToUint32HookFunc() DecodeHookFunc {
 	}
 }
 
-// StringToInt64HookFunc returns a DecodeHookFunc that converts
+// StringToInt64HookFunc returns a DecodeHookFuncType that converts
 // strings to int64.
-func StringToInt64HookFunc() DecodeHookFunc {
+func StringToInt64HookFunc() DecodeHookFuncType {
 	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
 		if f.Kind() != reflect.String || t.Kind() != reflect.Int64 {
 			return data, nil
@@ -613,9 +613,9 @@ func StringToInt64HookFunc() DecodeHookFunc {
 	}
 }
 
-// StringToUint64HookFunc returns a DecodeHookFunc that converts
+// StringToUint64HookFunc returns a DecodeHookFuncType that converts
 // strings to uint64.
-func StringToUint64HookFunc() DecodeHookFunc {
+func StringToUint64HookFunc() DecodeHookFuncType {
 	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
 		if f.Kind() != reflect.String || t.Kind() != reflect.Uint64 {
 			return data, nil
@@ -627,9 +627,9 @@ func StringToUint64HookFunc() DecodeHookFunc {
 	}
 }
 
-// StringToIntHookFunc returns a DecodeHookFunc that converts
+// StringToIntHookFunc returns a DecodeHookFuncType that converts
 // strings to int.
-func StringToIntHookFunc() DecodeHookFunc {
+func StringToIntHookFunc() DecodeHookFuncType {
 	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
 		if f.Kind() != reflect.String || t.Kind() != reflect.Int {
 			return data, nil
@@ -641,9 +641,9 @@ func StringToIntHookFunc() DecodeHookFunc {
 	}
 }
 
-// StringToUintHookFunc returns a DecodeHookFunc that converts
+// StringToUintHookFunc returns a DecodeHookFuncType that converts
 // strings to uint.
-func StringToUintHookFunc() DecodeHookFunc {
+func StringToUintHookFunc() DecodeHookFuncType {
 	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
 		if f.Kind() != reflect.String || t.Kind() != reflect.Uint {
 			return data, nil
@@ -655,9 +655,9 @@ func StringToUintHookFunc() DecodeHookFunc {
 	}
 }
 
-// StringToFloat32HookFunc returns a DecodeHookFunc that converts
+// StringToFloat32HookFunc returns a DecodeHookFuncType that converts
 // strings to float32.
-func StringToFloat32HookFunc() DecodeHookFunc {
+func StringToFloat32HookFunc() DecodeHookFuncType {
 	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
 		if f.Kind() != reflect.String || t.Kind() != reflect.Float32 {
 			return data, nil
@@ -669,9 +669,9 @@ func StringToFloat32HookFunc() DecodeHookFunc {
 	}
 }
 
-// StringToFloat64HookFunc returns a DecodeHookFunc that converts
+// StringToFloat64HookFunc returns a DecodeHookFuncType that converts
 // strings to float64.
-func StringToFloat64HookFunc() DecodeHookFunc {
+func StringToFloat64HookFunc() DecodeHookFuncType {
 	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
 		if f.Kind() != reflect.String || t.Kind() != reflect.Float64 {
 			return data, nil
@@ -683,9 +683,9 @@ func StringToFloat64HookFunc() DecodeHookFunc {
 	}
 }
 
-// StringToBoolHookFunc returns a DecodeHookFunc that converts
+// StringToBoolHookFunc returns a DecodeHookFuncType that converts
 // strings to bool.
-func StringToBoolHookFunc() DecodeHookFunc {
+func StringToBoolHookFunc() DecodeHookFuncType {
 	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
 		if f.Kind() != reflect.String || t.Kind() != reflect.Bool {
 			return data, nil
@@ -697,21 +697,21 @@ func StringToBoolHookFunc() DecodeHookFunc {
 	}
 }
 
-// StringToByteHookFunc returns a DecodeHookFunc that converts
+// StringToByteHookFunc returns a DecodeHookFuncType that converts
 // strings to byte.
-func StringToByteHookFunc() DecodeHookFunc {
+func StringToByteHookFunc() DecodeHookFuncType {
 	return StringToUint8HookFunc()
 }
 
-// StringToRuneHookFunc returns a DecodeHookFunc that converts
+// StringToRuneHookFunc returns a DecodeHookFuncType that converts
 // strings to rune.
-func StringToRuneHookFunc() DecodeHookFunc {
+func StringToRuneHookFunc() DecodeHookFuncType {
 	return StringToInt32HookFunc()
 }
 
-// StringToComplex64HookFunc returns a DecodeHookFunc that converts
+// StringToComplex64HookFunc returns a DecodeHookFuncType that converts
 // strings to complex64.
-func StringToComplex64HookFunc() DecodeHookFunc {
+func StringToComplex64HookFunc() DecodeHookFuncType {
 	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
 		if f.Kind() != reflect.String || t.Kind() != reflect.Complex64 {
 			return data, nil
@@ -723,9 +723,9 @@ func StringToComplex64HookFunc() DecodeHookFunc {
 	}
 }
 
-// StringToComplex128HookFunc returns a DecodeHookFunc that converts
+// StringToComplex128HookFunc returns a DecodeHookFuncType that converts
 // strings to complex128.
-func StringToComplex128HookFunc() DecodeHookFunc {
+func StringToComplex128HookFunc() DecodeHookFuncType {
 	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
 		if f.Kind() != reflect.String || t.Kind() != reflect.Complex128 {
 			return data, nil

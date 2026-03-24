@@ -312,7 +312,7 @@ func ExampleDecode_decodeHookFunc() {
 		"location": "-35.2809#149.1300",
 	}
 
-	toPersonLocationHookFunc := func() DecodeHookFunc {
+	toPersonLocationHookFunc := func() DecodeHookFuncType {
 		return func(f reflect.Type, t reflect.Type, data any) (any, error) {
 			if t != reflect.TypeOf(PersonLocation{}) {
 				return data, nil
