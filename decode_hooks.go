@@ -22,59 +22,74 @@ func safeInterface(v reflect.Value) any {
 	return v.Interface()
 }
 
-// typedDecodeHook takes a raw DecodeHookFunc (an any) and turns
-// it into the proper DecodeHookFunc type, such as DecodeHookFuncType.
-func typedDecodeHook(h DecodeHookFunc) DecodeHookFunc {
-	// Create variables here so we can reference them with the reflect pkg
-	var f1 DecodeHookFuncType
-	var f2 DecodeHookFuncKind
-	var f3 DecodeHookFuncValue
+// decodeHookFuncTyped is an internal interface restricting the types should be a hook function type.
+type decodeHookFuncTyped interface {
+	// Unify returns a DecodeHookFuncValue that can be used directly in the decoder, don't return a nil plz.
+	Unify() DecodeHookFuncValue
+}
 
+// unifyDecodeHook takes a raw DecodeHookFunc (an any) and turns it into a DecodeHookFuncValue(most wide form).
+// if the type fails to convert we return a closure always erroring to keep the previous behaviour
+func unifyDecodeHook(h DecodeHookFunc) DecodeHookFuncValue {
 	// Fill in the variables into this interface and the rest is done
 	// automatically using the reflect package.
-	potential := []any{f1, f2, f3}
+	potential := []decodeHookFuncTyped{
+		DecodeHookFuncType(nil),
+		DecodeHookFuncKind(nil),
+		DecodeHookFuncValue(nil),
+	}
 
 	v := reflect.ValueOf(h)
 	vt := v.Type()
 	for _, raw := range potential {
 		pt := reflect.ValueOf(raw).Type()
-		if vt.ConvertibleTo(pt) {
-			return v.Convert(pt).Interface()
+		// Check if the provided hook is convertible to this type (same signature)
+		if !vt.ConvertibleTo(pt) {
+			// Not convertible, try the next one
+			continue
 		}
+
+		anyV := v.Convert(pt).Interface()
+		typed, ok := anyV.(decodeHookFuncTyped)
+		if !ok {
+			// Here should never happen since the types in potential all implement decodeHookFuncTyped.
+			continue
+		}
+
+		unified := typed.Unify()
+		if unified == nil {
+			// Unify should never return nil, guards for further safety (maybe custom decodeHookFuncTyped)
+			return func(from reflect.Value, to reflect.Value) (any, error) {
+				return nil, fmt.Errorf("failed to unify decode hook: (%T).Unify() returned nil", typed)
+			}
+		}
+		return unified
 	}
 
-	return nil
-}
-
-// cachedDecodeHook takes a raw DecodeHookFunc (an any) and turns
-// it into a closure to be used directly
-// if the type fails to convert we return a closure always erroring to keep the previous behaviour
-func cachedDecodeHook(raw DecodeHookFunc) func(from reflect.Value, to reflect.Value) (any, error) {
-	switch f := typedDecodeHook(raw).(type) {
-	case DecodeHookFuncType:
-		return func(from reflect.Value, to reflect.Value) (any, error) {
-			if !from.IsValid() {
-				return f(reflect.TypeOf((*any)(nil)).Elem(), to.Type(), nil)
-			}
-			return f(from.Type(), to.Type(), from.Interface())
-		}
-	case DecodeHookFuncKind:
-		return func(from reflect.Value, to reflect.Value) (any, error) {
-			if !from.IsValid() {
-				return f(reflect.Invalid, to.Kind(), nil)
-			}
-			return f(from.Kind(), to.Kind(), from.Interface())
-		}
-	case DecodeHookFuncValue:
-		return func(from reflect.Value, to reflect.Value) (any, error) {
-			return f(from, to)
-		}
-	default:
-		return func(from reflect.Value, to reflect.Value) (any, error) {
-			return nil, errors.New("invalid decode hook signature")
-		}
+	return func(from reflect.Value, to reflect.Value) (any, error) {
+		return nil, errors.New("invalid decode hook signature")
 	}
 }
+
+func (h DecodeHookFuncType) Unify() DecodeHookFuncValue {
+	return func(from reflect.Value, to reflect.Value) (any, error) {
+		if !from.IsValid() {
+			return h(reflect.TypeOf((*any)(nil)).Elem(), to.Type(), nil)
+		}
+		return h(from.Type(), to.Type(), from.Interface())
+	}
+}
+
+func (h DecodeHookFuncKind) Unify() DecodeHookFuncValue {
+	return func(from reflect.Value, to reflect.Value) (any, error) {
+		if !from.IsValid() {
+			return h(reflect.Invalid, to.Kind(), nil)
+		}
+		return h(from.Kind(), to.Kind(), from.Interface())
+	}
+}
+
+func (h DecodeHookFuncValue) Unify() DecodeHookFuncValue { return h }
 
 // DecodeHookExec executes the given decode hook. This should be used
 // since it'll naturally degrade to the older backwards compatible DecodeHookFunc
@@ -83,40 +98,31 @@ func DecodeHookExec(
 	raw DecodeHookFunc,
 	from reflect.Value, to reflect.Value,
 ) (any, error) {
-	switch f := typedDecodeHook(raw).(type) {
-	case DecodeHookFuncType:
-		if !from.IsValid() {
-			return f(reflect.TypeOf((*any)(nil)).Elem(), to.Type(), nil)
-		}
-		return f(from.Type(), to.Type(), from.Interface())
-	case DecodeHookFuncKind:
-		if !from.IsValid() {
-			return f(reflect.Invalid, to.Kind(), nil)
-		}
-		return f(from.Kind(), to.Kind(), from.Interface())
-	case DecodeHookFuncValue:
-		return f(from, to)
-	default:
-		return nil, errors.New("invalid decode hook signature")
-	}
+	unified := unifyDecodeHook(raw)
+	return unified(from, to)
 }
 
 // ComposeDecodeHookFunc creates a single DecodeHookFunc that
 // automatically composes multiple DecodeHookFuncs.
 //
+// Given hooks should be one of the three function signatures:
+//   - [DecodeHookFuncType] func(reflect.Type, reflect.Type, any) (any, error)
+//   - [DecodeHookFuncKind] func(reflect.Kind, reflect.Kind, any) (any, error)
+//   - [DecodeHookFuncValue] func(reflect.Value, reflect.Value) (any, error)
+//
 // The composed funcs are called in order, with the result of the
 // previous transformation.
 func ComposeDecodeHookFunc(fs ...DecodeHookFunc) DecodeHookFuncValue {
-	cached := make([]func(from reflect.Value, to reflect.Value) (any, error), 0, len(fs))
+	unified := make([]DecodeHookFuncValue, 0, len(fs))
 	for _, f := range fs {
-		cached = append(cached, cachedDecodeHook(f))
+		unified = append(unified, unifyDecodeHook(f))
 	}
 	return func(f reflect.Value, t reflect.Value) (any, error) {
 		var err error
 		data := safeInterface(f)
 
 		newFrom := f
-		for _, c := range cached {
+		for _, c := range unified {
 			data, err = c(newFrom, t)
 			if err != nil {
 				return nil, err
@@ -137,17 +143,22 @@ func ComposeDecodeHookFunc(fs ...DecodeHookFunc) DecodeHookFuncValue {
 
 // OrComposeDecodeHookFunc executes all input hook functions until one of them returns no error. In that case its value is returned.
 // If all hooks return an error, OrComposeDecodeHookFunc returns an error concatenating all error messages.
+//
+// Given hooks should be one of the three function signatures:
+//   - [DecodeHookFuncType] func(reflect.Type, reflect.Type, any) (any, error)
+//   - [DecodeHookFuncKind] func(reflect.Kind, reflect.Kind, any) (any, error)
+//   - [DecodeHookFuncValue] func(reflect.Value, reflect.Value) (any, error)
 func OrComposeDecodeHookFunc(ff ...DecodeHookFunc) DecodeHookFuncValue {
-	cached := make([]func(from reflect.Value, to reflect.Value) (any, error), 0, len(ff))
+	unified := make([]DecodeHookFuncValue, 0, len(ff))
 	for _, f := range ff {
-		cached = append(cached, cachedDecodeHook(f))
+		unified = append(unified, unifyDecodeHook(f))
 	}
 	return func(a, b reflect.Value) (any, error) {
 		var allErrs string
 		var out any
 		var err error
 
-		for _, c := range cached {
+		for _, c := range unified {
 			out, err = c(a, b)
 			if err != nil {
 				allErrs += err.Error() + "\n"
