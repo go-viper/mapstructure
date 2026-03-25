@@ -521,7 +521,7 @@ func NewDecoder(config *DecoderConfig) (*Decoder, error) {
 		config: config,
 	}
 	if config.DecodeHook != nil {
-		result.cachedDecodeHook = cachedDecodeHook(config.DecodeHook)
+		result.cachedDecodeHook = unifyDecodeHook(config.DecodeHook)
 	}
 
 	return result, nil

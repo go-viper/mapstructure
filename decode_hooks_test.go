@@ -2172,3 +2172,98 @@ func TestErrorLeakageDecodeHook(t *testing.T) {
 		}
 	}
 }
+
+type customHookType string
+
+func (c customHookType) Unify() DecodeHookFuncValue {
+	if c == "send nil cuz im bad" {
+		return nil
+	}
+	return func(from, to reflect.Value) (any, error) {
+		return string(c), nil
+	}
+}
+
+func Test_unifyDecodeHook(t *testing.T) {
+	checkResultPassed := func(hook DecodeHookFuncValue) {
+		got, err := hook(reflect.ValueOf(""), reflect.ValueOf(0))
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		if got != "passed" {
+			t.Fatalf("expected 'passed', got %v", got)
+		}
+	}
+
+	t.Run("Passing DecodeHookFuncType", func(t *testing.T) {
+		hook := unifyDecodeHook(func(from, to reflect.Type, data any) (any, error) {
+			return "passed", nil
+		})
+		checkResultPassed(hook)
+	})
+	t.Run("Passing DecodeHookFuncType-Explicitly", func(t *testing.T) {
+		fn := DecodeHookFuncType(func(from, to reflect.Type, data any) (any, error) {
+			return "passed", nil
+		})
+		hook := unifyDecodeHook(fn)
+		checkResultPassed(hook)
+	})
+
+	t.Run("Passing DecodeHookFuncKind", func(t *testing.T) {
+		hook := unifyDecodeHook(func(from, to reflect.Kind, data any) (any, error) {
+			return "passed", nil
+		})
+		checkResultPassed(hook)
+	})
+	t.Run("Passing DecodeHookFuncKind-Explicitly", func(t *testing.T) {
+		fn := DecodeHookFuncKind(func(from, to reflect.Kind, data any) (any, error) {
+			return "passed", nil
+		})
+		hook := unifyDecodeHook(fn)
+		checkResultPassed(hook)
+	})
+
+	t.Run("Passing DecodeHookFuncValue", func(t *testing.T) {
+		hook := unifyDecodeHook(func(from, to reflect.Value) (any, error) {
+			return "passed", nil
+		})
+		checkResultPassed(hook)
+	})
+	t.Run("Passing DecodeHookFuncValue-Explicitly", func(t *testing.T) {
+		fn := DecodeHookFuncValue(func(from, to reflect.Value) (any, error) {
+			return "passed", nil
+		})
+		hook := unifyDecodeHook(fn)
+		checkResultPassed(hook)
+	})
+
+	t.Run("Passing non-hook type", func(t *testing.T) {
+		hook := unifyDecodeHook(42)
+		got, err := hook(reflect.ValueOf(""), reflect.ValueOf(0))
+		if err == nil {
+			t.Fatalf("expected error, got nil with output: %v", got)
+		}
+	})
+
+	t.Run("Passing DecodeHookFuncValue-Derived", func(t *testing.T) {
+		type MyDecodeHookFuncValue func(from, to reflect.Value) (any, error)
+		fn := MyDecodeHookFuncValue(func(from, to reflect.Value) (any, error) {
+			return "passed", nil
+		})
+		hook := unifyDecodeHook(fn)
+		checkResultPassed(hook)
+	})
+
+	t.Run("Custom hook type implementing Unify", func(t *testing.T) {
+		hook := unifyDecodeHook(customHookType("passed"))
+		checkResultPassed(hook)
+	})
+
+	t.Run("Custom hook type implementing Unify that returns nil", func(t *testing.T) {
+		hook := unifyDecodeHook(customHookType("send nil cuz im bad"))
+		got, err := hook(reflect.ValueOf(""), reflect.ValueOf(0))
+		if err == nil {
+			t.Fatalf("expected error, got nil with output: %v", got)
+		}
+	})
+}
