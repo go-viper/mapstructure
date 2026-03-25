@@ -2173,6 +2173,17 @@ func TestErrorLeakageDecodeHook(t *testing.T) {
 	}
 }
 
+type customHookType string
+
+func (c customHookType) Unify() DecodeHookFuncValue {
+	if c == "send nil cuz im bad" {
+		return nil
+	}
+	return func(from, to reflect.Value) (any, error) {
+		return string(c), nil
+	}
+}
+
 func Test_unifyDecodeHook(t *testing.T) {
 	checkResultPassed := func(hook DecodeHookFuncValue) {
 		got, err := hook(reflect.ValueOf(""), reflect.ValueOf(0))
@@ -2241,5 +2252,18 @@ func Test_unifyDecodeHook(t *testing.T) {
 		})
 		hook := unifyDecodeHook(fn)
 		checkResultPassed(hook)
+	})
+
+	t.Run("Custom hook type implementing Unify", func(t *testing.T) {
+		hook := unifyDecodeHook(customHookType("passed"))
+		checkResultPassed(hook)
+	})
+
+	t.Run("Custom hook type implementing Unify that returns nil", func(t *testing.T) {
+		hook := unifyDecodeHook(customHookType("send nil cuz im bad"))
+		got, err := hook(reflect.ValueOf(""), reflect.ValueOf(0))
+		if err == nil {
+			t.Fatalf("expected error, got nil with output: %v", got)
+		}
 	})
 }

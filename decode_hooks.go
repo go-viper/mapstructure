@@ -22,53 +22,59 @@ func safeInterface(v reflect.Value) any {
 	return v.Interface()
 }
 
-// decodeHookFuncTyped is an internal interface restricting the types should be a hook function type.
-type decodeHookFuncTyped interface {
+// DecodeHookFuncTyped restricting the hook types can be unified to a common DecodeHookFuncValue form.
+type DecodeHookFuncTyped interface {
 	// Unify returns a DecodeHookFuncValue that can be used directly in the decoder, don't return a nil plz.
 	Unify() DecodeHookFuncValue
 }
 
 // unifyDecodeHook takes a raw DecodeHookFunc (an any) and turns it into a DecodeHookFuncValue(most wide form).
-// if the type fails to convert we return a closure always erroring to keep the previous behaviour
+// if the type fails to convert we return a closure always erroring to keep the previous behavior
 func unifyDecodeHook(h DecodeHookFunc) DecodeHookFuncValue {
-	// Fill in the variables into this interface and the rest is done
-	// automatically using the reflect package.
-	potential := []decodeHookFuncTyped{
-		DecodeHookFuncType(nil),
-		DecodeHookFuncKind(nil),
-		DecodeHookFuncValue(nil),
-	}
-
-	v := reflect.ValueOf(h)
-	vt := v.Type()
-	for _, raw := range potential {
-		pt := reflect.ValueOf(raw).Type()
-		// Check if the provided hook is convertible to this type (same signature)
-		if !vt.ConvertibleTo(pt) {
-			// Not convertible, try the next one
-			continue
+	// Note: old versions panicked on nil
+	var typed DecodeHookFuncTyped
+	switch v := h.(type) {
+	case func(reflect.Type, reflect.Type, any) (any, error): // DecodeHookFuncType(implicitly)
+		typed = DecodeHookFuncType(v)
+	case func(reflect.Kind, reflect.Kind, any) (any, error): // DecodeHookFuncKind(implicitly)
+		typed = DecodeHookFuncKind(v)
+	case func(reflect.Value, reflect.Value) (any, error): // DecodeHookFuncValue(implicitly)
+		typed = DecodeHookFuncValue(v)
+	case DecodeHookFuncTyped: // Implemented decodeHookFuncTyped(explicitly type, internal/custom)
+		typed = v
+	default:
+		// Maybe some valid signature derived types that doesn't implement DecodeHookFuncTyped, but can be converted to a hook type
+		// try reflect-based conversion before giving up
+		rv := reflect.ValueOf(h)
+		candidates := []DecodeHookFuncTyped{
+			DecodeHookFuncType(nil),
+			DecodeHookFuncKind(nil),
+			DecodeHookFuncValue(nil),
 		}
-
-		anyV := v.Convert(pt).Interface()
-		typed, ok := anyV.(decodeHookFuncTyped)
-		if !ok {
-			// Here should never happen since the types in potential all implement decodeHookFuncTyped.
-			continue
-		}
-
-		unified := typed.Unify()
-		if unified == nil {
-			// Unify should never return nil, guards for further safety (maybe custom decodeHookFuncTyped)
-			return func(from reflect.Value, to reflect.Value) (any, error) {
-				return nil, fmt.Errorf("failed to unify decode hook: (%T).Unify() returned nil", typed)
+		for _, candidate := range candidates {
+			ct := reflect.TypeOf(candidate)
+			if !rv.CanConvert(ct) {
+				continue
 			}
+			// Convert it, then can be recognized as internal type in inner pass
+			anyV := rv.Convert(ct).Interface()
+			return unifyDecodeHook(anyV)
 		}
-		return unified
+
+		// Not a valid hook type, return a closure that always errors
+		return func(from reflect.Value, to reflect.Value) (any, error) {
+			return nil, errors.New("invalid decode hook signature")
+		}
 	}
 
-	return func(from reflect.Value, to reflect.Value) (any, error) {
-		return nil, errors.New("invalid decode hook signature")
+	unified := typed.Unify()
+	if unified == nil {
+		// Unify should never return nil, guards for further safety (maybe custom decodeHookFuncTyped)
+		return func(from reflect.Value, to reflect.Value) (any, error) {
+			return nil, fmt.Errorf("failed to unify decode hook: (%T).Unify() returned nil", typed)
+		}
 	}
+	return unified
 }
 
 func (h DecodeHookFuncType) Unify() DecodeHookFuncValue {
