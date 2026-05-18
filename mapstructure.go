@@ -1663,6 +1663,11 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 			continue
 		}
 		tagValue = strings.SplitN(tagValue, ",", 2)[0]
+		// `mapstructure:"-"` opts the field out of decoding entirely. Don't
+		// then turn around and report a "-" key as Unset/missing.
+		if tagValue == "-" {
+			continue
+		}
 		if tagValue != "" {
 			fieldName = tagValue
 		} else {
