@@ -1714,6 +1714,34 @@ func TestDecoder_ErrorUnset(t *testing.T) {
 	}
 }
 
+func TestDecoder_ErrorUnset_IgnoresDashTaggedField(t *testing.T) {
+	// Regression for #89: a field tagged `mapstructure:"-"` is opted out
+	// of decoding, so ErrorUnset shouldn't flag it as missing.
+	t.Parallel()
+
+	input := map[string]any{
+		"foo": "bar",
+	}
+
+	var result struct {
+		Foo string `mapstructure:"foo"`
+		Bar string `mapstructure:"-"`
+	}
+	config := &DecoderConfig{
+		ErrorUnset: true,
+		Result:     &result,
+	}
+
+	decoder, err := NewDecoder(config)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	if err := decoder.Decode(input); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestDecoder_ErrorUnset_AllowUnsetPointer(t *testing.T) {
 	t.Parallel()
 
