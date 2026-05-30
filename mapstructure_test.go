@@ -4673,3 +4673,25 @@ func TestUnmarshaler_StructToMap(t *testing.T) {
 		t.Errorf("expected Age 30, got %v", result["Age"])
 	}
 }
+
+func TestDecode_caseInsensitiveDuplicateKey(t *testing.T) {
+	// A case-insensitive fallback must not claim a key that another field
+	// already matched exactly: decoding {"name": ...} into a struct with both
+	// `name` and `NAME` fields should populate only the exact match.
+	type Result struct {
+		Name string `mapstructure:"name"`
+		NAME string `mapstructure:"NAME"`
+	}
+
+	var result Result
+	if err := Decode(map[string]interface{}{"name": "lower"}, &result); err != nil {
+		t.Fatalf("got an err: %s", err)
+	}
+
+	if result.Name != "lower" {
+		t.Errorf("Name should be 'lower', got: %#v", result.Name)
+	}
+	if result.NAME != "" {
+		t.Errorf("NAME should be empty, got: %#v", result.NAME)
+	}
+}
