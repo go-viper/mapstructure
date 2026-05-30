@@ -1681,6 +1681,14 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 					continue
 				}
 
+				// Skip keys already consumed by another field's exact
+				// match, so a case-insensitive fallback can't claim the
+				// same key a second time (e.g. fields `Name` and `NAME`
+				// both matching the key "name").
+				if _, unused := dataValKeysUnused[dataValKey.Interface()]; !unused {
+					continue
+				}
+
 				if d.config.MatchName(mK, fieldName) {
 					rawMapKey = dataValKey
 					rawMapVal = dataVal.MapIndex(dataValKey)
