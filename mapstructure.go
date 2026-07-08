@@ -311,12 +311,18 @@ type DecoderConfig struct {
 	//  }
 	Squash bool
 
-	// Deep will map structures in slices instead of copying them
+	// Deep will map structures in slices, maps and arrays instead of copying them
 	//
 	//  type Parent struct {
 	//      Children []Child `mapstructure:",deep"`
 	//  }
 	Deep bool
+
+	// If Indirect is true, container types such as slices and maps will
+	// use interface{} instead of the concrete value type, most prominently in nested maps/slices/arrays;
+	// e.g. []interface{} instead of [][]interface{} and map[k]interface{} instead map[k]map[k]v.
+	// Additionally, array types will be represented as []interface{}-slices, matching json double conversion behavior.
+	Indirect bool
 
 	// Metadata is the struct that will contain extra metadata about
 	// the decoding. If this is nil, then no metadata will be tracked.
@@ -527,10 +533,133 @@ func NewDecoder(config *DecoderConfig) (*Decoder, error) {
 	return result, nil
 }
 
+var interfaceType = reflect.TypeOf((*any)(nil)).Elem()
+
+// state propagates global/field-level configuration down the type hierarchy
+type state struct {
+	ValueType reflect.Type
+	Deep      bool
+	Indirect  bool
+}
+
+// returns new state with updated value type hint
+func (s state) deepType(t reflect.Type) state {
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+
+	switch t.Kind() {
+	case reflect.Struct:
+		s.ValueType = reflect.TypeOf(map[string]any{})
+	case reflect.Slice:
+		s = s.deepType(t.Elem())
+
+		s.ValueType = reflect.SliceOf(s.ValueType)
+	case reflect.Array:
+		s = s.deepType(t.Elem())
+
+		if s.Indirect {
+			s.ValueType = reflect.SliceOf(s.ValueType)
+		} else {
+			s.ValueType = reflect.ArrayOf(t.Len(), s.ValueType)
+		}
+	case reflect.Map:
+		s = s.deepType(t.Elem())
+
+		s.ValueType = reflect.MapOf(t.Key(), s.ValueType)
+	default:
+		if s.Indirect {
+			s.ValueType = interfaceType
+		} else {
+			s.ValueType = t
+		}
+	}
+
+	return s
+}
+
+// makeValueType instantiates hinted value type for opaque interface{} destinations
+func (s state) makeValueType() reflect.Value {
+	switch s.ValueType.Kind() {
+	case reflect.Map:
+		var t reflect.Type
+
+		if s.Indirect {
+			t = reflect.MapOf(s.ValueType.Key(), interfaceType)
+		} else {
+			t = s.ValueType
+		}
+
+		addr := reflect.New(t)
+
+		reflect.Indirect(addr).Set(reflect.MakeMap(t))
+
+		return indirectRoot(addr)
+	case reflect.Slice:
+		var t reflect.Type
+
+		if s.Indirect {
+			t = reflect.SliceOf(interfaceType)
+		} else {
+			t = s.ValueType
+		}
+
+		addr := reflect.New(t)
+
+		reflect.Indirect(addr).Set(reflect.MakeSlice(t, 0, 0))
+
+		return indirectRoot(addr)
+	case reflect.Array:
+		var t reflect.Type
+
+		if s.Indirect {
+			t = reflect.ArrayOf(s.ValueType.Len(), interfaceType)
+		} else {
+			t = s.ValueType
+		}
+
+		addr := reflect.New(t)
+
+		reflect.Indirect(addr).Set(reflect.Zero(t))
+
+		return indirectRoot(addr)
+	default:
+		return reflect.New(s.ValueType).Elem()
+	}
+}
+
+// elem returns new state with value type hint adjusted to the nested type
+func (s state) elem() state {
+	if s.ValueType == nil {
+		return s
+	}
+
+	switch s.ValueType.Kind() {
+	case reflect.Map, reflect.Slice, reflect.Array:
+		s.ValueType = s.ValueType.Elem()
+	default:
+	}
+
+	return s
+}
+
+func indirectRoot(v reflect.Value) reflect.Value {
+	for v.Kind() == reflect.Pointer {
+		v = v.Elem()
+	}
+
+	return v
+}
+
 // Decode decodes the given raw interface to the target pointer specified
 // by the configuration.
 func (d *Decoder) Decode(input any) error {
-	err := d.decode(d.config.RootName, input, reflect.ValueOf(d.config.Result).Elem())
+	s := state{
+		Deep:     d.config.Deep,
+		Indirect: d.config.Indirect,
+	}
+
+	err := d.decode(d.config.RootName, input, reflect.ValueOf(d.config.Result).Elem(), s)
 
 	// Retain some of the original behavior when multiple errors ocurr
 	var joinedErr interface{ Unwrap() []error }
@@ -551,7 +680,7 @@ func isNil(input any) bool {
 }
 
 // Decodes an unknown data type into a specific reflection value.
-func (d *Decoder) decode(name string, input any, outVal reflect.Value) error {
+func (d *Decoder) decode(name string, input any, outVal reflect.Value, s state) error {
 	var (
 		inputVal   = reflect.ValueOf(input)
 		outputKind = getKind(outVal)
@@ -629,7 +758,16 @@ func (d *Decoder) decode(name string, input any, outVal reflect.Value) error {
 		case reflect.Bool:
 			err = d.decodeBool(name, input, outVal)
 		case reflect.Interface:
-			err = d.decodeBasic(name, input, outVal)
+			if s.Deep && s.ValueType != nil && s.ValueType.Kind() == reflect.Map {
+				v := s.makeValueType()
+
+				outVal.Set(v)
+				outVal = v
+
+				err = d.decodeMap(name, input, outVal, s.elem())
+			} else {
+				err = d.decodeBasic(name, input, outVal, s)
+			}
 		case reflect.String:
 			err = d.decodeString(name, input, outVal)
 		case reflect.Int:
@@ -641,15 +779,15 @@ func (d *Decoder) decode(name string, input any, outVal reflect.Value) error {
 		case reflect.Complex64:
 			err = d.decodeComplex(name, input, outVal)
 		case reflect.Struct:
-			err = d.decodeStruct(name, input, outVal)
+			err = d.decodeStruct(name, input, outVal, s)
 		case reflect.Map:
-			err = d.decodeMap(name, input, outVal)
+			err = d.decodeMap(name, input, outVal, s.elem())
 		case reflect.Ptr:
-			addMetaKey, err = d.decodePtr(name, input, outVal)
+			addMetaKey, err = d.decodePtr(name, input, outVal, s)
 		case reflect.Slice:
-			err = d.decodeSlice(name, input, outVal)
+			err = d.decodeSlice(name, input, outVal, s.elem())
 		case reflect.Array:
-			err = d.decodeArray(name, input, outVal)
+			err = d.decodeArray(name, input, outVal, s.elem())
 		case reflect.Func:
 			err = d.decodeFunc(name, input, outVal)
 		default:
@@ -669,7 +807,7 @@ func (d *Decoder) decode(name string, input any, outVal reflect.Value) error {
 
 // This decodes a basic type (bool, int, string, etc.) and sets the
 // value to "data" of that type.
-func (d *Decoder) decodeBasic(name string, data any, val reflect.Value) error {
+func (d *Decoder) decodeBasic(name string, data any, val reflect.Value, s state) error {
 	if val.IsValid() && val.Elem().IsValid() {
 		elem := val.Elem()
 
@@ -692,7 +830,7 @@ func (d *Decoder) decodeBasic(name string, data any, val reflect.Value) error {
 
 		// Decode. If we have an error then return. We also return right
 		// away if we're not a copy because that means we decoded directly.
-		if err := d.decode(name, data, elem); err != nil || !copied {
+		if err := d.decode(name, data, elem, s); err != nil || !copied {
 			return err
 		}
 
@@ -706,8 +844,8 @@ func (d *Decoder) decodeBasic(name string, data any, val reflect.Value) error {
 	// If the input data is a pointer, and the assigned type is the dereference
 	// of that exact pointer, then indirect it so that we can assign it.
 	// Example: *string to string
-	if dataVal.Kind() == reflect.Ptr && dataVal.Type().Elem() == val.Type() {
-		dataVal = reflect.Indirect(dataVal)
+	if dataVal.Kind() == reflect.Ptr && indirectRoot(dataVal).Type() == val.Type() {
+		dataVal = indirectRoot(dataVal)
 	}
 
 	if !dataVal.IsValid() {
@@ -727,7 +865,7 @@ func (d *Decoder) decodeBasic(name string, data any, val reflect.Value) error {
 }
 
 func (d *Decoder) decodeString(name string, data any, val reflect.Value) error {
-	dataVal := reflect.Indirect(reflect.ValueOf(data))
+	dataVal := indirectRoot(reflect.ValueOf(data))
 	dataKind := getKind(dataVal)
 
 	converted := true
@@ -780,7 +918,7 @@ func (d *Decoder) decodeString(name string, data any, val reflect.Value) error {
 }
 
 func (d *Decoder) decodeInt(name string, data any, val reflect.Value) error {
-	dataVal := reflect.Indirect(reflect.ValueOf(data))
+	dataVal := indirectRoot(reflect.ValueOf(data))
 	dataKind := getKind(dataVal)
 	dataType := dataVal.Type()
 
@@ -835,7 +973,7 @@ func (d *Decoder) decodeInt(name string, data any, val reflect.Value) error {
 }
 
 func (d *Decoder) decodeUint(name string, data any, val reflect.Value) error {
-	dataVal := reflect.Indirect(reflect.ValueOf(data))
+	dataVal := indirectRoot(reflect.ValueOf(data))
 	dataKind := getKind(dataVal)
 	dataType := dataVal.Type()
 
@@ -906,7 +1044,7 @@ func (d *Decoder) decodeUint(name string, data any, val reflect.Value) error {
 }
 
 func (d *Decoder) decodeBool(name string, data any, val reflect.Value) error {
-	dataVal := reflect.Indirect(reflect.ValueOf(data))
+	dataVal := indirectRoot(reflect.ValueOf(data))
 	dataKind := getKind(dataVal)
 
 	switch {
@@ -942,7 +1080,7 @@ func (d *Decoder) decodeBool(name string, data any, val reflect.Value) error {
 }
 
 func (d *Decoder) decodeFloat(name string, data any, val reflect.Value) error {
-	dataVal := reflect.Indirect(reflect.ValueOf(data))
+	dataVal := indirectRoot(reflect.ValueOf(data))
 	dataKind := getKind(dataVal)
 	dataType := dataVal.Type()
 
@@ -997,7 +1135,7 @@ func (d *Decoder) decodeFloat(name string, data any, val reflect.Value) error {
 }
 
 func (d *Decoder) decodeComplex(name string, data any, val reflect.Value) error {
-	dataVal := reflect.Indirect(reflect.ValueOf(data))
+	dataVal := indirectRoot(reflect.ValueOf(data))
 	dataKind := getKind(dataVal)
 
 	switch {
@@ -1013,7 +1151,7 @@ func (d *Decoder) decodeComplex(name string, data any, val reflect.Value) error 
 	return nil
 }
 
-func (d *Decoder) decodeMap(name string, data any, val reflect.Value) error {
+func (d *Decoder) decodeMap(name string, data any, val reflect.Value, s state) error {
 	valType := val.Type()
 	valKeyType := valType.Key()
 	valElemType := valType.Elem()
@@ -1032,20 +1170,20 @@ func (d *Decoder) decodeMap(name string, data any, val reflect.Value) error {
 
 	// Resolve any levels of indirection
 	for dataVal.Kind() == reflect.Pointer {
-		dataVal = reflect.Indirect(dataVal)
+		dataVal = indirectRoot(dataVal)
 	}
 
 	// Check input type and based on the input type jump to the proper func
 	switch dataVal.Kind() {
 	case reflect.Map:
-		return d.decodeMapFromMap(name, dataVal, val, valMap)
+		return d.decodeMapFromMap(name, dataVal, val, valMap, s)
 
 	case reflect.Struct:
-		return d.decodeMapFromStruct(name, dataVal, val, valMap)
+		return d.decodeMapFromStruct(name, dataVal, val, valMap, s)
 
 	case reflect.Array, reflect.Slice:
 		if d.config.WeaklyTypedInput {
-			return d.decodeMapFromSlice(name, dataVal, val, valMap)
+			return d.decodeMapFromSlice(name, dataVal, val, valMap, s)
 		}
 
 		fallthrough
@@ -1058,7 +1196,7 @@ func (d *Decoder) decodeMap(name string, data any, val reflect.Value) error {
 	}
 }
 
-func (d *Decoder) decodeMapFromSlice(name string, dataVal reflect.Value, val reflect.Value, valMap reflect.Value) error {
+func (d *Decoder) decodeMapFromSlice(name string, dataVal reflect.Value, val reflect.Value, valMap reflect.Value, s state) error {
 	// Special case for BC reasons (covered by tests)
 	if dataVal.Len() == 0 {
 		val.Set(valMap)
@@ -1068,7 +1206,10 @@ func (d *Decoder) decodeMapFromSlice(name string, dataVal reflect.Value, val ref
 	for i := 0; i < dataVal.Len(); i++ {
 		err := d.decode(
 			name+"["+strconv.Itoa(i)+"]",
-			dataVal.Index(i).Interface(), val)
+			dataVal.Index(i).Interface(),
+			val,
+			s,
+		)
 		if err != nil {
 			return err
 		}
@@ -1077,7 +1218,7 @@ func (d *Decoder) decodeMapFromSlice(name string, dataVal reflect.Value, val ref
 	return nil
 }
 
-func (d *Decoder) decodeMapFromMap(name string, dataVal reflect.Value, val reflect.Value, valMap reflect.Value) error {
+func (d *Decoder) decodeMapFromMap(name string, dataVal reflect.Value, val reflect.Value, valMap reflect.Value, s state) error {
 	valType := val.Type()
 	valKeyType := valType.Key()
 	valElemType := valType.Elem()
@@ -1103,16 +1244,24 @@ func (d *Decoder) decodeMapFromMap(name string, dataVal reflect.Value, val refle
 		fieldName := name + "[" + k.String() + "]"
 
 		// First decode the key into the proper type
-		currentKey := reflect.Indirect(reflect.New(valKeyType))
-		if err := d.decode(fieldName, k.Interface(), currentKey); err != nil {
+		currentKey := indirectRoot(reflect.New(valKeyType))
+		if err := d.decode(fieldName, k.Interface(), currentKey, s); err != nil {
 			errs = append(errs, err)
 			continue
 		}
 
 		// Next decode the data into the proper type
 		v := dataVal.MapIndex(k).Interface()
-		currentVal := reflect.Indirect(reflect.New(valElemType))
-		if err := d.decode(fieldName, v, currentVal); err != nil {
+
+		var currentVal reflect.Value
+
+		if valElemType.Kind() == reflect.Interface && s.Deep && s.ValueType != nil {
+			currentVal = s.makeValueType()
+		} else {
+			currentVal = reflect.Indirect(reflect.New(valElemType))
+		}
+
+		if err := d.decode(fieldName, v, currentVal, s); err != nil {
 			errs = append(errs, err)
 			continue
 		}
@@ -1126,9 +1275,11 @@ func (d *Decoder) decodeMapFromMap(name string, dataVal reflect.Value, val refle
 	return errors.Join(errs...)
 }
 
-func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val reflect.Value, valMap reflect.Value) error {
+func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val reflect.Value, valMap reflect.Value, ps state) error {
 	typ := dataVal.Type()
 	for i := 0; i < typ.NumField(); i++ {
+		s := ps
+
 		// Get the StructField first since this is a cheap operation. If the
 		// field is unexported, then ignore it.
 		f := typ.Field(i)
@@ -1155,9 +1306,6 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 
 		// If Squash is set in the config, we squash the field down.
 		squash := d.config.Squash && v.Kind() == reflect.Struct && f.Anonymous
-
-		// If Deep is set in the config, set as default value.
-		deep := d.config.Deep
 
 		v = dereferencePtrToStructIfNeeded(v, d.config.TagName)
 
@@ -1208,7 +1356,9 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 				}
 			}
 
-			deep = deep || strings.Contains(tagValue[index+1:], "deep")
+			s.Deep = s.Deep || strings.Contains(tagValue[index+1:], "deep")
+
+			s.Indirect = s.Indirect || strings.Contains(tagValue[index+1:], "indirect")
 
 			if keyNameTagValue := tagValue[:index]; keyNameTagValue != "" {
 				keyName = keyNameTagValue
@@ -1220,9 +1370,7 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 			keyName = tagValue
 		}
 
-		switch v.Kind() {
-		// this is an embedded struct, so handle it differently
-		case reflect.Struct:
+		if v.Kind() == reflect.Struct {
 			x := reflect.New(v.Type())
 			x.Elem().Set(v)
 
@@ -1239,14 +1387,14 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 			addrVal := reflect.New(vMap.Type())
 			reflect.Indirect(addrVal).Set(vMap)
 
-			err := d.decode(keyName, x.Interface(), reflect.Indirect(addrVal))
+			err := d.decode(keyName, x.Interface(), indirectRoot(addrVal), s)
 			if err != nil {
 				return err
 			}
 
 			// the underlying map may have been completely overwritten so pull
 			// it indirectly out of the enclosing value.
-			vMap = reflect.Indirect(addrVal)
+			vMap = indirectRoot(addrVal)
 
 			if squash {
 				for _, k := range vMap.MapKeys() {
@@ -1255,44 +1403,33 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 			} else {
 				valMap.SetMapIndex(reflect.ValueOf(keyName), vMap)
 			}
+		} else {
+			rootV := indirectRoot(v)
 
-		case reflect.Slice:
-			if deep {
-				var childType reflect.Type
-				switch v.Type().Elem().Kind() {
-				case reflect.Struct:
-					childType = reflect.TypeOf(map[string]any{})
-				default:
-					childType = v.Type().Elem()
-				}
+			switch rootV.Kind() {
+			case reflect.Slice, reflect.Array, reflect.Map:
+				if s.Deep {
+					s = s.deepType(rootV.Type())
 
-				sType := reflect.SliceOf(childType)
+					vSlice := s.makeValueType()
 
-				addrVal := reflect.New(sType)
-
-				vSlice := reflect.MakeSlice(sType, v.Len(), v.Cap())
-
-				if v.Len() > 0 {
-					reflect.Indirect(addrVal).Set(vSlice)
-
-					err := d.decode(keyName, v.Interface(), reflect.Indirect(addrVal))
-					if err != nil {
-						return err
+					if rootV.Len() > 0 {
+						err := d.decode(keyName, rootV.Interface(), vSlice, s)
+						if err != nil {
+							return err
+						}
 					}
+
+					valMap.SetMapIndex(reflect.ValueOf(keyName), vSlice)
+
+					break
 				}
 
-				vSlice = reflect.Indirect(addrVal)
-
-				valMap.SetMapIndex(reflect.ValueOf(keyName), vSlice)
-
-				break
+				// When deep mapping is not needed, fallthrough to normal copy
+				fallthrough
+			default:
+				valMap.SetMapIndex(reflect.ValueOf(keyName), v)
 			}
-
-			// When deep mapping is not needed, fallthrough to normal copy
-			fallthrough
-
-		default:
-			valMap.SetMapIndex(reflect.ValueOf(keyName), v)
 		}
 	}
 
@@ -1303,12 +1440,12 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 	return nil
 }
 
-func (d *Decoder) decodePtr(name string, data any, val reflect.Value) (bool, error) {
+func (d *Decoder) decodePtr(name string, data any, val reflect.Value, s state) (bool, error) {
 	// If the input data is nil, then we want to just set the output
 	// pointer to be nil as well.
 	isNil := data == nil
 	if !isNil {
-		switch v := reflect.Indirect(reflect.ValueOf(data)); v.Kind() {
+		switch v := indirectRoot(reflect.ValueOf(data)); v.Kind() {
 		case reflect.Chan,
 			reflect.Func,
 			reflect.Interface,
@@ -1337,13 +1474,13 @@ func (d *Decoder) decodePtr(name string, data any, val reflect.Value) (bool, err
 			realVal = reflect.New(valElemType)
 		}
 
-		if err := d.decode(name, data, reflect.Indirect(realVal)); err != nil {
+		if err := d.decode(name, data, reflect.Indirect(realVal), s); err != nil {
 			return false, err
 		}
 
 		val.Set(realVal)
 	} else {
-		if err := d.decode(name, data, reflect.Indirect(val)); err != nil {
+		if err := d.decode(name, data, reflect.Indirect(val), s); err != nil {
 			return false, err
 		}
 	}
@@ -1353,7 +1490,7 @@ func (d *Decoder) decodePtr(name string, data any, val reflect.Value) (bool, err
 func (d *Decoder) decodeFunc(name string, data any, val reflect.Value) error {
 	// Create an element of the concrete (non pointer) type and decode
 	// into that. Then set the value of the pointer to this type.
-	dataVal := reflect.Indirect(reflect.ValueOf(data))
+	dataVal := indirectRoot(reflect.ValueOf(data))
 	if val.Type() != dataVal.Type() {
 		return newDecodeError(name, &UnconvertibleTypeError{
 			Expected: val,
@@ -1364,8 +1501,8 @@ func (d *Decoder) decodeFunc(name string, data any, val reflect.Value) error {
 	return nil
 }
 
-func (d *Decoder) decodeSlice(name string, data any, val reflect.Value) error {
-	dataVal := reflect.Indirect(reflect.ValueOf(data))
+func (d *Decoder) decodeSlice(name string, data any, val reflect.Value, s state) error {
+	dataVal := indirectRoot(reflect.ValueOf(data))
 	dataValKind := dataVal.Kind()
 	valType := val.Type()
 	valElemType := valType.Elem()
@@ -1386,16 +1523,16 @@ func (d *Decoder) decodeSlice(name string, data any, val reflect.Value) error {
 					return nil
 				}
 				// Create slice of maps of other sizes
-				return d.decodeSlice(name, []any{data}, val)
+				return d.decodeSlice(name, []any{data}, val, s)
 
 			case dataValKind == reflect.String && valElemType.Kind() == reflect.Uint8:
-				return d.decodeSlice(name, []byte(dataVal.String()), val)
+				return d.decodeSlice(name, []byte(dataVal.String()), val, s)
 
 			// All other types we try to convert to the slice type
 			// and "lift" it into it. i.e. a string becomes a string slice.
 			default:
 				// Just re-try this function with data as a slice.
-				return d.decodeSlice(name, []any{data}, val)
+				return d.decodeSlice(name, []any{data}, val, s)
 			}
 		}
 
@@ -1422,12 +1559,12 @@ func (d *Decoder) decodeSlice(name string, data any, val reflect.Value) error {
 	for i := 0; i < dataVal.Len(); i++ {
 		currentData := dataVal.Index(i).Interface()
 		for valSlice.Len() <= i {
-			valSlice = reflect.Append(valSlice, reflect.Zero(valElemType))
+			valSlice.Set(reflect.Append(valSlice, reflect.Zero(valElemType)))
 		}
 		currentField := valSlice.Index(i)
 
 		fieldName := name + "[" + strconv.Itoa(i) + "]"
-		if err := d.decode(fieldName, currentData, currentField); err != nil {
+		if err := d.decode(fieldName, currentData, currentField, s); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -1438,8 +1575,8 @@ func (d *Decoder) decodeSlice(name string, data any, val reflect.Value) error {
 	return errors.Join(errs...)
 }
 
-func (d *Decoder) decodeArray(name string, data any, val reflect.Value) error {
-	dataVal := reflect.Indirect(reflect.ValueOf(data))
+func (d *Decoder) decodeArray(name string, data any, val reflect.Value, s state) error {
+	dataVal := indirectRoot(reflect.ValueOf(data))
 	dataValKind := dataVal.Kind()
 	valType := val.Type()
 	valElemType := valType.Elem()
@@ -1463,7 +1600,7 @@ func (d *Decoder) decodeArray(name string, data any, val reflect.Value) error {
 				// and "lift" it into it. i.e. a string becomes a string array.
 				default:
 					// Just re-try this function with data as a slice.
-					return d.decodeArray(name, []any{data}, val)
+					return d.decodeArray(name, []any{data}, val, s)
 				}
 			}
 
@@ -1488,7 +1625,7 @@ func (d *Decoder) decodeArray(name string, data any, val reflect.Value) error {
 		currentField := valArray.Index(i)
 
 		fieldName := name + "[" + strconv.Itoa(i) + "]"
-		if err := d.decode(fieldName, currentData, currentField); err != nil {
+		if err := d.decode(fieldName, currentData, currentField, s); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -1499,8 +1636,8 @@ func (d *Decoder) decodeArray(name string, data any, val reflect.Value) error {
 	return errors.Join(errs...)
 }
 
-func (d *Decoder) decodeStruct(name string, data any, val reflect.Value) error {
-	dataVal := reflect.Indirect(reflect.ValueOf(data))
+func (d *Decoder) decodeStruct(name string, data any, val reflect.Value, s state) error {
+	dataVal := indirectRoot(reflect.ValueOf(data))
 
 	// If the type of the value to write to and the data match directly,
 	// then we just set it directly instead of recursing into the structure.
@@ -1512,7 +1649,7 @@ func (d *Decoder) decodeStruct(name string, data any, val reflect.Value) error {
 	dataValKind := dataVal.Kind()
 	switch dataValKind {
 	case reflect.Map:
-		return d.decodeStructFromMap(name, dataVal, val)
+		return d.decodeStructFromMap(name, dataVal, val, s)
 
 	case reflect.Struct:
 		// Not the most efficient way to do this but we can optimize later if
@@ -1530,11 +1667,11 @@ func (d *Decoder) decodeStruct(name string, data any, val reflect.Value) error {
 		addrVal := reflect.New(mval.Type())
 
 		reflect.Indirect(addrVal).Set(mval)
-		if err := d.decodeMapFromStruct(name, dataVal, reflect.Indirect(addrVal), mval); err != nil {
+		if err := d.decodeMapFromStruct(name, dataVal, indirectRoot(addrVal), mval, s); err != nil {
 			return err
 		}
 
-		result := d.decodeStructFromMap(name, reflect.Indirect(addrVal), val)
+		result := d.decodeStructFromMap(name, indirectRoot(addrVal), val, s)
 		return result
 
 	default:
@@ -1543,7 +1680,7 @@ func (d *Decoder) decodeStruct(name string, data any, val reflect.Value) error {
 	}
 }
 
-func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) error {
+func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value, s state) error {
 	dataValType := dataVal.Type()
 	if kind := dataValType.Key().Kind(); kind != reflect.String && kind != reflect.Interface {
 		return newDecodeError(name,
@@ -1718,7 +1855,7 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 			fieldName = name + "." + fieldName
 		}
 
-		if err := d.decode(fieldName, rawMapVal.Interface(), fieldValue); err != nil {
+		if err := d.decode(fieldName, rawMapVal.Interface(), fieldValue, s); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -1733,7 +1870,7 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 		}
 
 		// Decode it as-if we were just decoding this map onto our map.
-		if err := d.decodeMap(name, remain, remainField.val); err != nil {
+		if err := d.decodeMap(name, remain, remainField.val, s); err != nil {
 			errs = append(errs, err)
 		}
 
