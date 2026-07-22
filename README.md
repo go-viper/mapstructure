@@ -22,7 +22,7 @@ go get github.com/go-viper/mapstructure/v2
 
 ## Migrating from `github.com/mitchellh/mapstructure`
 
-[@mitchehllh](https://github.com/mitchellh) announced his intent to archive some of his unmaintained projects (see [here](https://gist.github.com/mitchellh/90029601268e59a29e64e55bab1c5bdc) and [here](https://github.com/mitchellh/mapstructure/issues/349)). This is a repository achieved the "blessed fork" status.
+[@mitchellh](https://github.com/mitchellh) announced his intent to archive some of his unmaintained projects (see [here](https://gist.github.com/mitchellh/90029601268e59a29e64e55bab1c5bdc) and [here](https://github.com/mitchellh/mapstructure/issues/349)). This repository achieved the "blessed fork" status.
 
 You can migrate to this package by changing your import paths in your Go files to `github.com/go-viper/mapstructure/v2`.
 The API is the same, so you don't need to change anything else.
