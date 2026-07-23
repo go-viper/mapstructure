@@ -602,6 +602,10 @@ func TestStringToTimeDurationHookFunc(t *testing.T) {
 			{"5µs", 5 * time.Microsecond},              // Unicode micro symbol is valid
 			{"5.s", 5 * time.Second},                   // Trailing decimal is valid
 			{"5s5m5s", 10*time.Second + 5*time.Minute}, // Duplicate units are valid
+			{" 5s ", 5 * time.Second},                   // Leading/trailing spaces trimmed
+			{"\t10ms\n", 10 * time.Millisecond},          // Tab/newline trimmed
+			{"\r1h\r", time.Hour},                        // Carriage return trimmed
+			{"5s ", 5 * time.Second},                     // Trailing space trimmed
 		},
 		fail: []decodeHookFailureTestCase[string, time.Duration]{
 			{"5"},        // Missing unit
@@ -612,10 +616,6 @@ func TestStringToTimeDurationHookFunc(t *testing.T) {
 			{"5..5s"},    // Multiple decimal points
 			{"++5s"},     // Double plus sign
 			{"--5s"},     // Double minus sign
-			{" 5s "},     // Leading/trailing whitespace not handled
-			{"\t10ms\n"}, // Tab/newline whitespace not handled
-			{"\r1h\r"},   // Carriage return whitespace not handled
-			{"5s "},      // Trailing space after unit
 			{" 5 s"},     // Space before unit
 			{"5 s 10 m"}, // Spaces in combined duration
 			{"∞s"},       // Unicode infinity symbol
@@ -1229,9 +1229,6 @@ func TestStringToInt8HookFunc(t *testing.T) {
 			{"42.5"},                   // Float
 			{"abc"},                    // Non-numeric
 			{""},                       // Empty string
-			{" 42 "},                   // Whitespace not handled by strconv
-			{"\t42\n"},                 // Whitespace not handled by strconv
-			{"\r42\r"},                 // Whitespace not handled by strconv
 			{"0x"},                     // Invalid hex
 			{"0b"},                     // Invalid binary
 			{"0o"},                     // Invalid octal
@@ -1290,9 +1287,6 @@ func TestStringToUint8HookFunc(t *testing.T) {
 			{"0b"},          // Invalid binary
 			{"0o"},          // Invalid octal
 			{"++42"},        // Double plus
-			{" 42 "},        // Whitespace not handled by strconv
-			{"\t42\n"},      // Whitespace not handled by strconv
-			{"\r42\r"},      // Whitespace not handled by strconv
 			{"42abc"},       // Trailing non-numeric
 			{"abc42"},       // Leading non-numeric
 			{"42 43"},       // Multiple numbers
@@ -1556,12 +1550,6 @@ func TestStringToFloat32HookFunc(t *testing.T) {
 			{"1.2.3"},    // Multiple dots
 			{"1..2"},     // Double dots
 			{"."},        // Just a dot
-			{" 42.5 "},   // Whitespace not handled by strconv
-			{"\t42.5\n"}, // Whitespace not handled by strconv
-			{"\r42.5\r"}, // Whitespace not handled by strconv
-			{" 42.5 "},   // Whitespace not handled by strconv
-			{"\t42.5\n"}, // Whitespace not handled by strconv
-			{"\r42.5\r"}, // Whitespace not handled by strconv
 			{"1e1e1"},    // Multiple exponents
 			{"∞"},        // Unicode infinity
 			{"NaΝ"},      // Unicode NaN lookalike
@@ -1792,12 +1780,6 @@ func TestStringToComplex64HookFunc(t *testing.T) {
 			{"1+1..2i"},        // Double dots in imaginary
 			{".+.i"},           // Just dots
 			{"1e1e1+1i"},       // Multiple exponents in real
-			{" 42+42i "},       // Whitespace not handled by strconv
-			{"\t42i\n"},        // Whitespace not handled by strconv
-			{"\r42\r"},         // Whitespace not handled by strconv
-			{" 42+42i "},       // Whitespace not handled by strconv
-			{"\t42i\n"},        // Whitespace not handled by strconv
-			{"\r42\r"},         // Whitespace not handled by strconv
 			{"1+1e1e1i"},       // Multiple exponents in imaginary
 			{"∞"},              // Unicode infinity
 			{"∞+∞i"},           // Unicode infinity complex
@@ -1862,6 +1844,9 @@ func TestStringToBoolHookFunc(t *testing.T) {
 			{"f", false},     // Single character false (lowercase)
 			{"F", false},     // Single character false (uppercase)
 			{"0", false},     // Numeric false
+			{" true ", true},  // Leading/trailing spaces trimmed
+			{"\ttrue\n", true}, // Tab/newline trimmed
+			{"\rfalse\r", false}, // Carriage return trimmed
 		},
 		fail: []decodeHookFailureTestCase[string, bool]{
 			{""},           // Empty string
@@ -1887,11 +1872,6 @@ func TestStringToBoolHookFunc(t *testing.T) {
 			{"fasle"},      // Typo in false
 			{"tru"},        // Incomplete true
 			{"fals"},       // Incomplete false
-			{" true "},     // Whitespace not handled by strconv.ParseBool
-			{"\ttrue\n"},   // Tab and newline whitespace
-			{"\rfalse\r"},  // Carriage return whitespace
-			{" 1 "},        // Whitespace around numeric true
-			{" 0 "},        // Whitespace around numeric false
 			{"∞"},          // Unicode infinity symbol
 			{"тrue"},       // Cyrillic lookalike characters
 		},
@@ -2170,5 +2150,28 @@ func TestErrorLeakageDecodeHook(t *testing.T) {
 		} else {
 			t.Logf("case %d: got safe error: %v", i, err)
 		}
+	}
+}
+
+func TestStringToTimeDurationHookFuncTrimSpace(t *testing.T) {
+	f := StringToTimeDurationHookFunc()
+	result, err := DecodeHookExec(f, reflect.ValueOf(" 2s "), reflect.ValueOf(time.Duration(0)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result != 2*time.Second {
+		t.Fatalf("got %v", result)
+	}
+}
+
+func TestStringToIPHookFuncTrimSpace(t *testing.T) {
+	f := StringToIPHookFunc()
+	result, err := DecodeHookExec(f, reflect.ValueOf(" 127.0.0.1 "), reflect.ValueOf(net.IP{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ip, ok := result.(net.IP)
+	if !ok || !ip.Equal(net.ParseIP("127.0.0.1")) {
+		t.Fatalf("got %v", result)
 	}
 }

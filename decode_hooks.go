@@ -223,8 +223,8 @@ func StringToTimeDurationHookFunc() DecodeHookFunc {
 			return data, nil
 		}
 
-		// Convert it by parsing
-		d, err := time.ParseDuration(data.(string))
+		// Convert it by parsing (trim spaces common in config/env values)
+		d, err := time.ParseDuration(strings.TrimSpace(data.(string)))
 
 		return d, wrapTimeParseDurationError(err)
 	}
@@ -244,7 +244,7 @@ func StringToTimeLocationHookFunc() DecodeHookFunc {
 		if t != reflect.TypeOf(time.Local) {
 			return data, nil
 		}
-		d, err := time.LoadLocation(data.(string))
+		d, err := time.LoadLocation(strings.TrimSpace(data.(string)))
 
 		return d, wrapTimeParseLocationError(err)
 	}
@@ -266,7 +266,7 @@ func StringToURLHookFunc() DecodeHookFunc {
 		}
 
 		// Convert it by parsing
-		u, err := url.Parse(data.(string))
+		u, err := url.Parse(strings.TrimSpace(data.(string)))
 
 		return u, wrapUrlError(err)
 	}
@@ -288,7 +288,7 @@ func StringToIPHookFunc() DecodeHookFunc {
 		}
 
 		// Convert it by parsing
-		ip := net.ParseIP(data.(string))
+		ip := net.ParseIP(strings.TrimSpace(data.(string)))
 		if ip == nil {
 			return net.IP{}, fmt.Errorf("failed parsing ip")
 		}
@@ -334,7 +334,7 @@ func StringToTimeHookFunc(layout string) DecodeHookFunc {
 		}
 
 		// Convert it by parsing
-		ti, err := time.Parse(layout, data.(string))
+		ti, err := time.Parse(layout, strings.TrimSpace(data.(string)))
 
 		return ti, wrapTimeParseError(err)
 	}
@@ -524,7 +524,7 @@ func StringToInt8HookFunc() DecodeHookFunc {
 		}
 
 		// Convert it by parsing
-		i64, err := strconv.ParseInt(data.(string), 0, 8)
+		i64, err := strconv.ParseInt(strings.TrimSpace(data.(string)), 0, 8)
 		return int8(i64), wrapStrconvNumError(err)
 	}
 }
@@ -538,7 +538,7 @@ func StringToUint8HookFunc() DecodeHookFunc {
 		}
 
 		// Convert it by parsing
-		u64, err := strconv.ParseUint(data.(string), 0, 8)
+		u64, err := strconv.ParseUint(strings.TrimSpace(data.(string)), 0, 8)
 		return uint8(u64), wrapStrconvNumError(err)
 	}
 }
@@ -552,7 +552,7 @@ func StringToInt16HookFunc() DecodeHookFunc {
 		}
 
 		// Convert it by parsing
-		i64, err := strconv.ParseInt(data.(string), 0, 16)
+		i64, err := strconv.ParseInt(strings.TrimSpace(data.(string)), 0, 16)
 		return int16(i64), wrapStrconvNumError(err)
 	}
 }
@@ -566,7 +566,7 @@ func StringToUint16HookFunc() DecodeHookFunc {
 		}
 
 		// Convert it by parsing
-		u64, err := strconv.ParseUint(data.(string), 0, 16)
+		u64, err := strconv.ParseUint(strings.TrimSpace(data.(string)), 0, 16)
 		return uint16(u64), wrapStrconvNumError(err)
 	}
 }
@@ -580,7 +580,7 @@ func StringToInt32HookFunc() DecodeHookFunc {
 		}
 
 		// Convert it by parsing
-		i64, err := strconv.ParseInt(data.(string), 0, 32)
+		i64, err := strconv.ParseInt(strings.TrimSpace(data.(string)), 0, 32)
 		return int32(i64), wrapStrconvNumError(err)
 	}
 }
@@ -594,7 +594,7 @@ func StringToUint32HookFunc() DecodeHookFunc {
 		}
 
 		// Convert it by parsing
-		u64, err := strconv.ParseUint(data.(string), 0, 32)
+		u64, err := strconv.ParseUint(strings.TrimSpace(data.(string)), 0, 32)
 		return uint32(u64), wrapStrconvNumError(err)
 	}
 }
@@ -608,7 +608,7 @@ func StringToInt64HookFunc() DecodeHookFunc {
 		}
 
 		// Convert it by parsing
-		i64, err := strconv.ParseInt(data.(string), 0, 64)
+		i64, err := strconv.ParseInt(strings.TrimSpace(data.(string)), 0, 64)
 		return int64(i64), wrapStrconvNumError(err)
 	}
 }
@@ -622,7 +622,7 @@ func StringToUint64HookFunc() DecodeHookFunc {
 		}
 
 		// Convert it by parsing
-		u64, err := strconv.ParseUint(data.(string), 0, 64)
+		u64, err := strconv.ParseUint(strings.TrimSpace(data.(string)), 0, 64)
 		return uint64(u64), wrapStrconvNumError(err)
 	}
 }
@@ -636,7 +636,7 @@ func StringToIntHookFunc() DecodeHookFunc {
 		}
 
 		// Convert it by parsing
-		i64, err := strconv.ParseInt(data.(string), 0, 0)
+		i64, err := strconv.ParseInt(strings.TrimSpace(data.(string)), 0, 0)
 		return int(i64), wrapStrconvNumError(err)
 	}
 }
@@ -650,7 +650,7 @@ func StringToUintHookFunc() DecodeHookFunc {
 		}
 
 		// Convert it by parsing
-		u64, err := strconv.ParseUint(data.(string), 0, 0)
+		u64, err := strconv.ParseUint(strings.TrimSpace(data.(string)), 0, 0)
 		return uint(u64), wrapStrconvNumError(err)
 	}
 }
@@ -664,7 +664,7 @@ func StringToFloat32HookFunc() DecodeHookFunc {
 		}
 
 		// Convert it by parsing
-		f64, err := strconv.ParseFloat(data.(string), 32)
+		f64, err := strconv.ParseFloat(strings.TrimSpace(data.(string)), 32)
 		return float32(f64), wrapStrconvNumError(err)
 	}
 }
@@ -678,7 +678,7 @@ func StringToFloat64HookFunc() DecodeHookFunc {
 		}
 
 		// Convert it by parsing
-		f64, err := strconv.ParseFloat(data.(string), 64)
+		f64, err := strconv.ParseFloat(strings.TrimSpace(data.(string)), 64)
 		return f64, wrapStrconvNumError(err)
 	}
 }
@@ -692,7 +692,7 @@ func StringToBoolHookFunc() DecodeHookFunc {
 		}
 
 		// Convert it by parsing
-		b, err := strconv.ParseBool(data.(string))
+		b, err := strconv.ParseBool(strings.TrimSpace(data.(string)))
 		return b, wrapStrconvNumError(err)
 	}
 }
@@ -718,7 +718,7 @@ func StringToComplex64HookFunc() DecodeHookFunc {
 		}
 
 		// Convert it by parsing
-		c128, err := strconv.ParseComplex(data.(string), 64)
+		c128, err := strconv.ParseComplex(strings.TrimSpace(data.(string)), 64)
 		return complex64(c128), wrapStrconvNumError(err)
 	}
 }
@@ -732,7 +732,7 @@ func StringToComplex128HookFunc() DecodeHookFunc {
 		}
 
 		// Convert it by parsing
-		c128, err := strconv.ParseComplex(data.(string), 128)
+		c128, err := strconv.ParseComplex(strings.TrimSpace(data.(string)), 128)
 		return c128, wrapStrconvNumError(err)
 	}
 }
