@@ -3865,6 +3865,7 @@ func TestDecode_structArrayDeepMap(t *testing.T) {
 	type SourceParent struct {
 		ChildrenA []SourceChild  `mapstructure:"children-a,deep"`
 		ChildrenB *[]SourceChild `mapstructure:"children-b,deep"`
+		ChildrenC []*SourceChild `mapstructure:"children-c,deep"`
 	}
 
 	var target map[string]any
@@ -3875,6 +3876,10 @@ func TestDecode_structArrayDeepMap(t *testing.T) {
 			{String: "two"},
 		},
 		ChildrenB: &[]SourceChild{
+			{String: "one"},
+			{String: "two"},
+		},
+		ChildrenC: []*SourceChild{
 			{String: "one"},
 			{String: "two"},
 		},
@@ -3890,6 +3895,10 @@ func TestDecode_structArrayDeepMap(t *testing.T) {
 			{"some-string": "two"},
 		},
 		"children-b": []map[string]any{
+			{"some-string": "one"},
+			{"some-string": "two"},
+		},
+		"children-c": []map[string]any{
 			{"some-string": "one"},
 			{"some-string": "two"},
 		},

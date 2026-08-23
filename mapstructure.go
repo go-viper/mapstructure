@@ -1259,11 +1259,14 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 		case reflect.Slice:
 			if deep {
 				var childType reflect.Type
-				switch v.Type().Elem().Kind() {
-				case reflect.Struct:
+				elemType := v.Type().Elem()
+				// Recurse into slices of structs and slices of pointers to
+				// structs alike, so []*T maps the same way []T does.
+				if elemType.Kind() == reflect.Struct ||
+					(elemType.Kind() == reflect.Ptr && elemType.Elem().Kind() == reflect.Struct) {
 					childType = reflect.TypeOf(map[string]any{})
-				default:
-					childType = v.Type().Elem()
+				} else {
+					childType = elemType
 				}
 
 				sType := reflect.SliceOf(childType)
