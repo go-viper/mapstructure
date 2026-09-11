@@ -745,3 +745,46 @@ func TestDecodeToMapWithMultipleIndirection(t *testing.T) {
 		}
 	})
 }
+
+// Issue 165: non-pointer time.Time became an empty map when decoding struct→map.
+func TestIssue165TimeInStructToMap(t *testing.T) {
+	now := time.Date(2026, 1, 12, 15, 7, 35, 0, time.FixedZone("x", 4*3600))
+	type Record struct {
+		Date   time.Time    `json:"date"`
+		DateP  *time.Time   `json:"datep"`
+		Dates  []time.Time  `json:"dates"`
+		DatesP []*time.Time `json:"datesp"`
+	}
+	record := Record{
+		Date:   now,
+		DateP:  &now,
+		Dates:  []time.Time{now},
+		DatesP: []*time.Time{&now},
+	}
+
+	var result map[string]any
+	decoder, err := NewDecoder(&DecoderConfig{
+		Result:  &result,
+		TagName: "json",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := decoder.Decode(record); err != nil {
+		t.Fatal(err)
+	}
+
+	got, ok := result["date"].(time.Time)
+	if !ok {
+		t.Fatalf("date type = %T (%#v); want time.Time", result["date"], result["date"])
+	}
+	if !got.Equal(now) {
+		t.Fatalf("date = %v; want %v", got, now)
+	}
+	if _, ok := result["datep"].(time.Time); !ok {
+		// *time.Time may be stored as time.Time or *time.Time depending on path
+		if _, ok := result["datep"].(*time.Time); !ok {
+			t.Fatalf("datep type = %T; want time.Time or *time.Time", result["datep"])
+		}
+	}
+}
