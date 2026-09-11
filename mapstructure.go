@@ -205,6 +205,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-viper/mapstructure/v2/internal/errors"
 )
@@ -1247,6 +1248,15 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 			// the underlying map may have been completely overwritten so pull
 			// it indirectly out of the enclosing value.
 			vMap = reflect.Indirect(addrVal)
+
+			// time.Time (and similar) has only unexported fields, so the nested
+			// map is empty unless a DecodeHook produced one. Keep the concrete
+			// time.Time value in that case (issue #165) while still allowing
+			// hooks that intentionally map *time.Time → map.
+			if _, isTime := v.Interface().(time.Time); isTime && vMap.Len() == 0 && !squash {
+				valMap.SetMapIndex(reflect.ValueOf(keyName), v)
+				break
+			}
 
 			if squash {
 				for _, k := range vMap.MapKeys() {
