@@ -917,6 +917,33 @@ func TestDecode_EmbeddedPointerSquash_WithoutPreInitializedStructs_FromMapToStru
 	}
 }
 
+type EmbeddedUnexportedPointerSquash struct {
+	*embeddedUnexported `mapstructure:",squash"`
+	Vunique             string
+}
+
+type embeddedUnexported struct {
+	Vstring string
+}
+
+func TestDecode_EmbeddedUnexportedPointerSquash_FromMapToStruct(t *testing.T) {
+	t.Parallel()
+
+	input := map[string]any{
+		"Vstring": "foo",
+		"Vunique": "bar",
+	}
+
+	result := EmbeddedUnexportedPointerSquash{}
+	err := Decode(input, &result)
+	if err == nil {
+		t.Fatal("expected an error decoding into an unexported embedded pointer squash, got nil")
+	}
+	if !strings.Contains(err.Error(), "unsupported type for squash") {
+		t.Fatalf("unexpected error message: %s", err)
+	}
+}
+
 func TestDecode_EmbeddedPointerSquashWithNestedMapstructure_FromStructToMap(t *testing.T) {
 	t.Parallel()
 

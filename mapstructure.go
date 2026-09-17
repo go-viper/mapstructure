@@ -1625,6 +1625,13 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 				case reflect.Ptr:
 					if fieldVal.Type().Elem().Kind() == reflect.Struct {
 						if fieldVal.IsNil() {
+							if !fieldVal.CanSet() {
+								errs = append(errs, newDecodeError(
+									name+"."+fieldType.Name,
+									fmt.Errorf("unsupported type for squash: %s", fieldVal.Kind()),
+								))
+								continue
+							}
 							fieldVal.Set(reflect.New(fieldVal.Type().Elem()))
 						}
 						structs = append(structs, fieldVal.Elem())
