@@ -889,6 +889,49 @@ func TestWeaklyTypedHook(t *testing.T) {
 	}
 }
 
+func TestRecursiveStructToMapHookFunc_nil(t *testing.T) {
+	cases := []struct {
+		name string
+		hook DecodeHookFunc
+	}{
+		{"standalone", RecursiveStructToMapHookFunc()},
+		{"composed", ComposeDecodeHookFunc(
+			StringToTimeDurationHookFunc(),
+			RecursiveStructToMapHookFunc(),
+		)},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			input := map[string]any{
+				"nil": nil,
+				"nested": struct {
+					Value string
+				}{Value: "hello"},
+			}
+			var result map[string]any
+			decoder, err := NewDecoder(&DecoderConfig{
+				DecodeHook: tc.hook,
+				DecodeNil:  true,
+				Result:     &result,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := decoder.Decode(input); err != nil {
+				t.Fatal(err)
+			}
+			want := map[string]any{
+				"nil":    nil,
+				"nested": map[string]any{"Value": "hello"},
+			}
+			if !reflect.DeepEqual(result, want) {
+				t.Fatalf("expected %#v, got %#v", want, result)
+			}
+		})
+	}
+}
+
 func TestStructToMapHookFuncTabled(t *testing.T) {
 	var f DecodeHookFunc = RecursiveStructToMapHookFunc()
 

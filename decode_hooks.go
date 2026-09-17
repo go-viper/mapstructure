@@ -380,7 +380,7 @@ func WeaklyTypedHook(
 func RecursiveStructToMapHookFunc() DecodeHookFunc {
 	return func(f reflect.Value, t reflect.Value) (any, error) {
 		if f.Kind() != reflect.Struct {
-			return f.Interface(), nil
+			return safeInterface(f), nil
 		}
 
 		var i any = struct{}{}
