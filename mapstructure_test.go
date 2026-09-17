@@ -2789,6 +2789,87 @@ func testArrayInput(t *testing.T, input map[string]interface{}, expected *Array)
 }
 
 func stringPtr(v string) *string              { return &v }
+
+type BasicIgnored struct {
+	Vstring string `mapstructure:"-"`
+	Vint    int
+}
+
+func TestDecoder_ErrorUnset_IgnoredField(t *testing.T) {
+	input := map[string]interface{}{
+		"Vint": 1,
+	}
+
+	var result BasicIgnored
+	err := Decode(&input, &result)
+	if err != nil {
+		t.Fatalf("got an error: %s", err)
+	}
+
+	if result.Vint != 1 {
+		t.Errorf("Vint should be 1: %d", result.Vint)
+	}
+}
+
+func TestDecoder_ErrorUnset_IgnoredFieldWithConfig(t *testing.T) {
+	input := map[string]interface{}{
+		"Vint": 1,
+	}
+
+	var result BasicIgnored
+	config := &DecoderConfig{
+		ErrorUnset: true,
+		Result:     &result,
+		DecodeHook: DecodeHookFunc(func(
+			f reflect.Type,
+			t reflect.Type,
+			data interface{}) (interface{}, error) {
+			return data, nil
+		}),
+	}
+	decoder, err := NewDecoder(config)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	err = decoder.Decode(input)
+	if err != nil {
+		t.Fatalf("got an error: %s", err)
+	}
+
+	if result.Vint != 1 {
+		t.Errorf("Vint should be 1: %d", result.Vint)
+	}
+}
+
+type BasicIgnoredUntagged struct {
+	Vstring string
+	Vint    int
+}
+
+func TestDecoder_ErrorUnset_IgnoredUntaggedField(t *testing.T) {
+	input := map[string]interface{}{
+		"Vint": 1,
+	}
+
+	var result BasicIgnoredUntagged
+	config := &DecoderConfig{
+		ErrorUnset:           true,
+		Result:               &result,
+		IgnoreUntaggedFields: true,
+	}
+	decoder, err := NewDecoder(config)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	err = decoder.Decode(input)
+	if err != nil {
+		t.Fatalf("got an error: %s", err)
+	}
+
+	if result.Vstring != "" {
+		t.Errorf("Vstring should be empty: %s", result.Vstring)
+	}
+}
 func intPtr(v int) *int                       { return &v }
 func uintPtr(v uint) *uint                    { return &v }
 func boolPtr(v bool) *bool                    { return &v }

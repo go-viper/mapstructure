@@ -1363,6 +1363,13 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 			fieldName = tagValue
 		}
 
+		if tagValue == "-" {
+			continue
+		}
+		if tagValue == "" && d.config.IgnoreUntaggedFields {
+			continue
+		}
+
 		rawMapKey := reflect.ValueOf(fieldName)
 		rawMapVal := dataVal.MapIndex(rawMapKey)
 		if !rawMapVal.IsValid() {
