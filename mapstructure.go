@@ -1203,6 +1203,9 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 					ptr := v.MapRange()
 					for ptr.Next() {
 						valMap.SetMapIndex(ptr.Key(), ptr.Value())
+						if k, ok := ptr.Key().Interface().(string); ok {
+							d.appendMetaKey(name, k)
+						}
 					}
 					continue
 				}
@@ -1293,6 +1296,7 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 
 		default:
 			valMap.SetMapIndex(reflect.ValueOf(keyName), v)
+			d.appendMetaKey(name, keyName)
 		}
 	}
 
@@ -1799,6 +1803,17 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 	}
 
 	return nil
+}
+
+// appendMetaKey records a successfully decoded key when metadata is enabled.
+func (d *Decoder) appendMetaKey(name, key string) {
+	if d.config.Metadata == nil || key == "" {
+		return
+	}
+	if name != "" {
+		key = name + "." + key
+	}
+	d.config.Metadata.Keys = append(d.config.Metadata.Keys, key)
 }
 
 func isEmptyValue(v reflect.Value) bool {

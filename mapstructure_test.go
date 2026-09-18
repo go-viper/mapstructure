@@ -2737,6 +2737,50 @@ func TestDecodeMetadata(t *testing.T) {
 	}
 }
 
+func TestDecodeMetadata_StructToMap(t *testing.T) {
+	t.Parallel()
+
+	type ExampleStruct struct {
+		ID          string `mapstructure:"id"`
+		Name        string `mapstructure:"name"`
+		Description string `mapstructure:"description"`
+		Hidden      string `mapstructure:"-"`
+		unexported  string
+	}
+
+	input := &ExampleStruct{
+		ID:          "123",
+		Name:        "test",
+		Description: "desc",
+		Hidden:      "hidden",
+		unexported:  "unexported value",
+	}
+
+	var resultMap map[string]any
+	var md Metadata
+	if err := DecodeMetadata(input, &resultMap, &md); err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	wantMap := map[string]any{
+		"id":          "123",
+		"name":        "test",
+		"description": "desc",
+	}
+	if !reflect.DeepEqual(resultMap, wantMap) {
+		t.Fatalf("bad result: %#v", resultMap)
+	}
+
+	wantKeys := []string{"description", "id", "name"}
+	sort.Strings(md.Keys)
+	if !reflect.DeepEqual(md.Keys, wantKeys) {
+		t.Fatalf("bad keys: %#v", md.Keys)
+	}
+	if len(md.Unused) != 0 {
+		t.Fatalf("bad unused: %#v", md.Unused)
+	}
+}
+
 func TestMetadata(t *testing.T) {
 	t.Parallel()
 
