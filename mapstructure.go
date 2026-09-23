@@ -1100,7 +1100,7 @@ func (d *Decoder) decodeMapFromMap(name string, dataVal reflect.Value, val refle
 	}
 
 	for _, k := range dataVal.MapKeys() {
-		fieldName := name + "[" + k.String() + "]"
+		fieldName := name + "[" + mapKeyName(k) + "]"
 
 		// First decode the key into the proper type
 		currentKey := reflect.Indirect(reflect.New(valKeyType))
@@ -1124,6 +1124,26 @@ func (d *Decoder) decodeMapFromMap(name string, dataVal reflect.Value, val refle
 	val.Set(valMap)
 
 	return errors.Join(errs...)
+}
+
+// mapKeyName renders a map key for error messages and metadata. reflect.Value's
+// String method returns the key itself only for a string Kind and a placeholder
+// such as "<interface {} Value>" for anything else, so keys of an
+// any-keyed map - what YAML decoders produce - have to be unwrapped first.
+func mapKeyName(k reflect.Value) string {
+	if k.Kind() == reflect.Interface && !k.IsNil() {
+		k = k.Elem()
+	}
+
+	if k.Kind() == reflect.String {
+		return k.String()
+	}
+
+	if !k.IsValid() || !k.CanInterface() {
+		return k.String()
+	}
+
+	return fmt.Sprintf("%v", k.Interface())
 }
 
 func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val reflect.Value, valMap reflect.Value) error {
