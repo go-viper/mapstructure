@@ -2795,6 +2795,59 @@ func TestMetadata(t *testing.T) {
 	}
 }
 
+func TestMetadata_MapKeys(t *testing.T) {
+	t.Parallel()
+
+	type testResult struct {
+		Vmap map[string]string
+	}
+
+	// YAML decoders hand mapstructure an any-keyed map: the keys still have to
+	// be reported by their value, not by reflect.Value's placeholder string.
+	input := map[string]any{
+		"vmap": map[any]any{"foo": "bar", "baz": "qux"},
+	}
+
+	var md Metadata
+	var result testResult
+	decoder, err := NewDecoder(&DecoderConfig{Metadata: &md, Result: &result})
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	if err := decoder.Decode(input); err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	keys := map[string]struct{}{}
+	for _, k := range md.Keys {
+		keys[k] = struct{}{}
+	}
+
+	for _, expected := range []string{"Vmap", "Vmap[foo]", "Vmap[baz]"} {
+		if _, ok := keys[expected]; !ok {
+			t.Fatalf("missing key %q: %#v", expected, md.Keys)
+		}
+	}
+}
+
+func TestDecodeMapKeyName(t *testing.T) {
+	t.Parallel()
+
+	var result map[string]string
+
+	// The int key cannot be decoded into a string key, and the error has to
+	// name the offending key rather than "<interface {} Value>".
+	err := Decode(map[any]any{7: "foo"}, &result)
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+
+	if !strings.Contains(err.Error(), "'[7]'") {
+		t.Fatalf("bad error: %s", err)
+	}
+}
+
 func TestMetadata_Embedded(t *testing.T) {
 	t.Parallel()
 
