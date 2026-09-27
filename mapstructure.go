@@ -1447,35 +1447,34 @@ func (d *Decoder) decodeArray(name string, data any, val reflect.Value) error {
 
 	valArray := val
 
-	if isComparable(valArray) && valArray.Interface() == reflect.Zero(valArray.Type()).Interface() || d.config.ZeroFields {
-		// Check input type
-		if dataValKind != reflect.Array && dataValKind != reflect.Slice {
-			if d.config.WeaklyTypedInput {
-				switch {
-				// Empty maps turn into empty arrays
-				case dataValKind == reflect.Map:
-					if dataVal.Len() == 0 {
-						val.Set(reflect.Zero(arrayType))
-						return nil
-					}
-
-				// All other types we try to convert to the array type
-				// and "lift" it into it. i.e. a string becomes a string array.
-				default:
-					// Just re-try this function with data as a slice.
-					return d.decodeArray(name, []any{data}, val)
+	// Check input type even when reusing an existing array.
+	if dataValKind != reflect.Array && dataValKind != reflect.Slice {
+		if d.config.WeaklyTypedInput {
+			switch {
+			// Empty maps turn into empty arrays
+			case dataValKind == reflect.Map:
+				if dataVal.Len() == 0 {
+					val.Set(reflect.Zero(arrayType))
+					return nil
 				}
+
+			// All other types we try to convert to the array type
+			// and "lift" it into it. i.e. a string becomes a string array.
+			default:
+				// Just re-try this function with data as a slice.
+				return d.decodeArray(name, []any{data}, val)
 			}
-
-			return newDecodeError(name,
-				fmt.Errorf("source data must be an array or slice, got %s", dataValKind))
-
-		}
-		if dataVal.Len() > arrayType.Len() {
-			return newDecodeError(name,
-				fmt.Errorf("expected source data to have length less or equal to %d, got %d", arrayType.Len(), dataVal.Len()))
 		}
 
+		return newDecodeError(name,
+			fmt.Errorf("source data must be an array or slice, got %s", dataValKind))
+	}
+	if dataVal.Len() > arrayType.Len() {
+		return newDecodeError(name,
+			fmt.Errorf("expected source data to have length less or equal to %d, got %d", arrayType.Len(), dataVal.Len()))
+	}
+
+	if isComparable(valArray) && valArray.Interface() == reflect.Zero(valArray.Type()).Interface() || d.config.ZeroFields {
 		// Make a new array to hold our result, same size as the original data.
 		valArray = reflect.New(arrayType).Elem()
 	}
