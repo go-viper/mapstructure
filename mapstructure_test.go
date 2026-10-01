@@ -4673,3 +4673,96 @@ func TestUnmarshaler_StructToMap(t *testing.T) {
 		t.Errorf("expected Age 30, got %v", result["Age"])
 	}
 }
+
+func TestDecode_EmbeddedStructFieldShadowing(t *testing.T) {
+	t.Parallel()
+
+	type A struct {
+		ObjType string `json:"obj_type"`
+		ObjID   int64  `json:"obj_id"`
+		Version int    `json:"version"`
+	}
+	type B struct {
+		Version string `json:"version"`
+		A
+	}
+
+	input := map[string]any{
+		"obj_type": "b",
+		"obj_id":   int64(2),
+		"version":  "defg",
+	}
+
+	var result B
+	decoder, err := NewDecoder(&DecoderConfig{
+		Squash:  true,
+		TagName: "json",
+		Result:  &result,
+	})
+	if err != nil {
+		t.Fatalf("unexpected NewDecoder error: %s", err)
+	}
+
+	if err := decoder.Decode(input); err != nil {
+		t.Fatalf("unexpected Decode error: %s", err)
+	}
+
+	if result.Version != "defg" {
+		t.Errorf("expected B.Version to be 'defg', got: %s", result.Version)
+	}
+	if result.A.Version != 0 {
+		t.Errorf("expected B.A.Version to be 0 (shadowed), got: %d", result.A.Version)
+	}
+	if result.A.ObjType != "b" {
+		t.Errorf("expected B.A.ObjType to be 'b', got: %s", result.A.ObjType)
+	}
+	if result.A.ObjID != 2 {
+		t.Errorf("expected B.A.ObjID to be 2, got: %d", result.A.ObjID)
+	}
+}
+
+func TestDecode_EmbeddedStructFieldShadowing_MultiLevel(t *testing.T) {
+	t.Parallel()
+
+	type Level2 struct {
+		Name  string `mapstructure:"name"`
+		Value int    `mapstructure:"value"`
+		Extra string `mapstructure:"extra"`
+	}
+	type Level1 struct {
+		Level2 `mapstructure:",squash"`
+		Value  string `mapstructure:"value"`
+	}
+	type Level0 struct {
+		Level1 `mapstructure:",squash"`
+		Name   int `mapstructure:"name"`
+	}
+
+	input := map[string]any{
+		"name":  100,
+		"value": "v1",
+		"extra": "deep",
+	}
+
+	var result Level0
+	err := Decode(input, &result)
+	if err != nil {
+		t.Fatalf("unexpected Decode error: %s", err)
+	}
+
+	if result.Name != 100 {
+		t.Errorf("expected Level0.Name to be 100, got: %d", result.Name)
+	}
+	if result.Level1.Level2.Name != "" {
+		t.Errorf("expected Level2.Name to be empty (shadowed by Level0), got: %s", result.Level1.Level2.Name)
+	}
+	if result.Level1.Value != "v1" {
+		t.Errorf("expected Level1.Value to be 'v1', got: %s", result.Level1.Value)
+	}
+	if result.Level1.Level2.Value != 0 {
+		t.Errorf("expected Level2.Value to be 0 (shadowed by Level1), got: %d", result.Level1.Level2.Value)
+	}
+	if result.Level1.Level2.Extra != "deep" {
+		t.Errorf("expected Level2.Extra to be 'deep', got: %s", result.Level1.Level2.Extra)
+	}
+}

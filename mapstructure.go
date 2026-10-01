@@ -1564,24 +1564,38 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 	// This slice will keep track of all the structs we'll be decoding.
 	// There can be more than one struct if there are embedded structs
 	// that are squashed.
-	structs := make([]reflect.Value, 1, 5)
-	structs[0] = val
+	type structInfo struct {
+		val   reflect.Value
+		depth int
+	}
+	structs := make([]structInfo, 1, 5)
+	structs[0] = structInfo{val: val, depth: 0}
 
 	// Compile the list of all the fields that we're going to be decoding
 	// from all the structs.
 	type field struct {
 		field reflect.StructField
 		val   reflect.Value
+		name  string
 	}
 
 	// remainField is set to a valid field set with the "remain" tag if
 	// we are keeping track of remaining values.
 	var remainField *field
 
+	type seenField struct {
+		name  string
+		depth int
+	}
+	seenFields := []seenField{}
+
 	fields := []field{}
 	for len(structs) > 0 {
-		structVal := structs[0]
+		structItem := structs[0]
 		structs = structs[1:]
+
+		structVal := structItem.val
+		currentDepth := structItem.depth
 
 		structType := structVal.Type()
 
@@ -1617,17 +1631,17 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 			if squash {
 				switch fieldVal.Kind() {
 				case reflect.Struct:
-					structs = append(structs, fieldVal)
+					structs = append(structs, structInfo{val: fieldVal, depth: currentDepth + 1})
 				case reflect.Interface:
 					if !fieldVal.IsNil() {
-						structs = append(structs, fieldVal.Elem().Elem())
+						structs = append(structs, structInfo{val: fieldVal.Elem().Elem(), depth: currentDepth + 1})
 					}
 				case reflect.Ptr:
 					if fieldVal.Type().Elem().Kind() == reflect.Struct {
 						if fieldVal.IsNil() {
 							fieldVal.Set(reflect.New(fieldVal.Type().Elem()))
 						}
-						structs = append(structs, fieldVal.Elem())
+						structs = append(structs, structInfo{val: fieldVal.Elem(), depth: currentDepth + 1})
 					} else {
 						errs = append(errs, newDecodeError(
 							name+"."+fieldType.Name,
@@ -1645,29 +1659,41 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 
 			// Build our field
 			if remain {
-				remainField = &field{fieldType, fieldVal}
+				remainField = &field{field: fieldType, val: fieldVal}
 			} else {
-				// Normal struct field, store it away
-				fields = append(fields, field{fieldType, fieldVal})
+				tagValue, _ := getTagValue(fieldType, d.config.TagName)
+				if tagValue == "" && d.config.IgnoreUntaggedFields {
+					continue
+				}
+				tagValue = strings.SplitN(tagValue, ",", 2)[0]
+				fieldName := fieldType.Name
+				if tagValue != "" {
+					fieldName = tagValue
+				} else {
+					fieldName = d.config.MapFieldName(fieldName)
+				}
+
+				shadowed := false
+				for _, sf := range seenFields {
+					if sf.depth < currentDepth && d.config.MatchName(sf.name, fieldName) {
+						shadowed = true
+						break
+					}
+				}
+				if shadowed {
+					continue
+				}
+
+				seenFields = append(seenFields, seenField{name: fieldName, depth: currentDepth})
+				fields = append(fields, field{field: fieldType, val: fieldVal, name: fieldName})
 			}
 		}
 	}
 
 	// for fieldType, field := range fields {
 	for _, f := range fields {
-		field, fieldValue := f.field, f.val
-		fieldName := field.Name
-
-		tagValue, _ := getTagValue(field, d.config.TagName)
-		if tagValue == "" && d.config.IgnoreUntaggedFields {
-			continue
-		}
-		tagValue = strings.SplitN(tagValue, ",", 2)[0]
-		if tagValue != "" {
-			fieldName = tagValue
-		} else {
-			fieldName = d.config.MapFieldName(fieldName)
-		}
+		fieldValue := f.val
+		fieldName := f.name
 
 		rawMapKey := reflect.ValueOf(fieldName)
 		rawMapVal := dataVal.MapIndex(rawMapKey)
