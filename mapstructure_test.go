@@ -3900,6 +3900,112 @@ func TestDecode_structArrayDeepMap(t *testing.T) {
 	}
 }
 
+func TestDecode_structPtrArrayDeepMap(t *testing.T) {
+	type SourceChild struct {
+		String string `mapstructure:"some-string"`
+	}
+
+	type SourceParent struct {
+		ChildrenA []*SourceChild  `mapstructure:"children-a,deep"`
+		ChildrenB *[]*SourceChild `mapstructure:"children-b,deep"`
+	}
+
+	var target map[string]any
+
+	source := SourceParent{
+		ChildrenA: []*SourceChild{
+			{String: "one"},
+			{String: "two"},
+		},
+		ChildrenB: &[]*SourceChild{
+			{String: "one"},
+			{String: "two"},
+		},
+	}
+
+	if err := Decode(source, &target); err != nil {
+		t.Fatalf("got error: %s", err)
+	}
+
+	expected := map[string]any{
+		"children-a": []map[string]any{
+			{"some-string": "one"},
+			{"some-string": "two"},
+		},
+		"children-b": []map[string]any{
+			{"some-string": "one"},
+			{"some-string": "two"},
+		},
+	}
+
+	if !reflect.DeepEqual(target, expected) {
+		t.Fatalf("failed: \nexpected: %#v\nresult: %#v", expected, target)
+	}
+
+	// Also verify with DecoderConfig.Deep = true and no deep tag
+	type SourceParentNoTag struct {
+		ChildrenA []*SourceChild  `mapstructure:"children-a"`
+		ChildrenB *[]*SourceChild `mapstructure:"children-b"`
+	}
+
+	var targetNoTag map[string]any
+
+	sourceNoTag := SourceParentNoTag{
+		ChildrenA: []*SourceChild{
+			{String: "one"},
+			{String: "two"},
+		},
+		ChildrenB: &[]*SourceChild{
+			{String: "one"},
+			{String: "two"},
+		},
+	}
+
+	dec, err := NewDecoder(&DecoderConfig{
+		Deep:   true,
+		Result: &targetNoTag,
+	})
+	if err != nil {
+		t.Fatalf("got error: %s", err)
+	}
+	if err := dec.Decode(sourceNoTag); err != nil {
+		t.Fatalf("got error: %s", err)
+	}
+
+	if !reflect.DeepEqual(targetNoTag, expected) {
+		t.Fatalf("failed: \nexpected: %#v\nresult: %#v", expected, targetNoTag)
+	}
+
+	// Verify slice of pointers with nil elements
+	sourceWithNil := SourceParent{
+		ChildrenA: []*SourceChild{
+			{String: "one"},
+			nil,
+		},
+		ChildrenB: &[]*SourceChild{
+			nil,
+			{String: "two"},
+		},
+	}
+	var targetWithNil map[string]any
+	if err := Decode(sourceWithNil, &targetWithNil); err != nil {
+		t.Fatalf("got error: %s", err)
+	}
+	expectedWithNil := map[string]any{
+		"children-a": []map[string]any{
+			{"some-string": "one"},
+			nil,
+		},
+		"children-b": []map[string]any{
+			nil,
+			{"some-string": "two"},
+		},
+	}
+	if !reflect.DeepEqual(targetWithNil, expectedWithNil) {
+		t.Fatalf("failed: \nexpected: %#v\nresult: %#v", expectedWithNil, targetWithNil)
+	}
+}
+
 func TestDecoder_RootName(t *testing.T) {
 	t.Parallel()
 

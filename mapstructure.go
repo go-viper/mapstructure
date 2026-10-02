@@ -1259,7 +1259,11 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 		case reflect.Slice:
 			if deep {
 				var childType reflect.Type
-				switch v.Type().Elem().Kind() {
+				elemType := v.Type().Elem()
+				for elemType.Kind() == reflect.Pointer {
+					elemType = elemType.Elem()
+				}
+				switch elemType.Kind() {
 				case reflect.Struct:
 					childType = reflect.TypeOf(map[string]any{})
 				default:
