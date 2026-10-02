@@ -788,7 +788,14 @@ func (d *Decoder) decodeInt(name string, data any, val reflect.Value) error {
 	case dataKind == reflect.Int:
 		val.SetInt(dataVal.Int())
 	case dataKind == reflect.Uint:
-		val.SetInt(int64(dataVal.Uint()))
+		ui := dataVal.Uint()
+		// A uint larger than the destination int wraps to a negative value.
+		// 9223372036854775808 became -9223372036854775808.
+		limit := uint64(1)<<uint(val.Type().Bits()-1) - 1
+		if ui > limit {
+			return fmt.Errorf("cannot parse '%s', %d overflows int", name, ui)
+		}
+		val.SetInt(int64(ui))
 	case dataKind == reflect.Float32:
 		val.SetInt(int64(dataVal.Float()))
 	case dataKind == reflect.Bool && d.config.WeaklyTypedInput:
