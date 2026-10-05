@@ -682,6 +682,45 @@ func TestStringToTimeLocationHookFunc(t *testing.T) {
 	suite.Run(t)
 }
 
+// Regression test: a platform without a readable zoneinfo database surfaces a raw
+// syscall error from time.LoadLocation (e.g. "operation not permitted" on sandboxed
+// darwin, ENOSYS on some containers) instead of "unknown time zone" — the hook must
+// normalize either into a stable error message.
+func TestStringToTimeLocationHookFunc_NormalizesRawLoadLocationErrors(t *testing.T) {
+	t.Setenv("ZONEINFO", "")
+
+	f := StringToTimeLocationHookFunc()
+	_, err := DecodeHookExec(f, reflect.ValueOf("Mars/Olympus_Mons"), reflect.ValueOf(time.Local))
+	if err == nil {
+		t.Fatal("expected an error for an unknown time zone")
+	}
+
+	if !strings.Contains(err.Error(), "invalid time zone format") {
+		t.Fatalf("expected a normalized time zone error, got: %v", err)
+	}
+}
+
+func TestStringToTimeLocationHookFunc_DirectLoadLocationErrorIsWrapped(t *testing.T) {
+	raw := errors.New("operation not permitted")
+
+	wrapped := wrapTimeParseLocationError(raw)
+	if wrapped == nil {
+		t.Fatal("expected a wrapped error, got nil")
+	}
+	if !errors.Is(wrapped, raw) {
+		t.Fatalf("expected the raw error to be wrapped, got: %v", wrapped)
+	}
+	if got := wrapped.Error(); got != "invalid time zone format: operation not permitted" {
+		t.Fatalf("unexpected wrapped message: %q", got)
+	}
+}
+
+func TestStringToTimeLocationHookFunc_NilErrorPassesThrough(t *testing.T) {
+	if err := wrapTimeParseLocationError(nil); err != nil {
+		t.Fatalf("expected nil, got %v", err)
+	}
+}
+
 func TestStringToURLHookFunc(t *testing.T) {
 	httpURL, _ := url.Parse("http://example.com")
 	httpsURL, _ := url.Parse("https://example.com")
