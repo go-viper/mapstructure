@@ -231,14 +231,13 @@ func wrapTimeParseDurationError(err error) error {
 	return err
 }
 
+// Always wrap so the message does not leak platform-dependent syscall text:
+// LoadLocation surfaces the raw firstErr (e.g. "operation not permitted" on a
+// sandboxed darwin host), instead of "unknown time zone <name>".
 func wrapTimeParseLocationError(err error) error {
 	if err == nil {
 		return nil
 	}
-	errMsg := err.Error()
-	if strings.Contains(errMsg, "unknown time zone") || strings.HasPrefix(errMsg, "time: unknown format") {
-		return fmt.Errorf("invalid time zone format: %w", err)
-	}
 
-	return err
+	return fmt.Errorf("invalid time zone format: %w", err)
 }
