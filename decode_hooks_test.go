@@ -824,6 +824,8 @@ func TestStringToIPNetHookFunc(t *testing.T) {
 }
 
 func TestWeaklyTypedHook(t *testing.T) {
+	type octet uint8
+	type bytes []byte
 	var f DecodeHookFunc = WeaklyTypedHook
 
 	strValue := reflect.ValueOf("")
@@ -865,6 +867,18 @@ func TestWeaklyTypedHook(t *testing.T) {
 			reflect.ValueOf([]uint8("foo")),
 			strValue,
 			"foo", // byte slice converts to string
+			false,
+		},
+		{
+			reflect.ValueOf(bytes("foo")),
+			strValue,
+			"foo",
+			false,
+		},
+		{
+			reflect.ValueOf([]octet{'f', 'o', 'o'}),
+			strValue,
+			"foo",
 			false,
 		},
 

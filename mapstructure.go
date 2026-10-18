@@ -756,10 +756,10 @@ func (d *Decoder) decodeString(name string, data any, val reflect.Value) error {
 			if dataKind == reflect.Array {
 				uints = make([]uint8, dataVal.Len())
 				for i := range uints {
-					uints[i] = dataVal.Index(i).Interface().(uint8)
+					uints[i] = uint8(dataVal.Index(i).Uint())
 				}
 			} else {
-				uints = dataVal.Interface().([]uint8)
+				uints = dataVal.Bytes()
 			}
 			val.SetString(string(uints))
 		default:

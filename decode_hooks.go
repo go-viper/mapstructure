@@ -367,7 +367,7 @@ func WeaklyTypedHook(
 			dataType := dataVal.Type()
 			elemKind := dataType.Elem().Kind()
 			if elemKind == reflect.Uint8 {
-				return string(dataVal.Interface().([]uint8)), nil
+				return string(dataVal.Bytes()), nil
 			}
 		case reflect.Uint:
 			return strconv.FormatUint(dataVal.Uint(), 10), nil

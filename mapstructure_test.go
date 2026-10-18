@@ -1524,6 +1524,38 @@ func TestDecode_StructMatch(t *testing.T) {
 	}
 }
 
+func TestWeakDecode_NamedBytesToString(t *testing.T) {
+	type octet uint8
+	type bytes []byte
+	type octets []octet
+
+	cases := []struct {
+		name  string
+		input any
+		want  string
+	}{
+		{"named slice", bytes{'f', 'o', 'o'}, "foo"},
+		{"named element slice", []octet{'f', 'o', 'o'}, "foo"},
+		{"named slice and elements", octets{'f', 'o', 'o'}, "foo"},
+		{"named element array", [3]octet{'f', 'o', 'o'}, "foo"},
+		{"nil slice", octets(nil), ""},
+		{"empty slice", octets{}, ""},
+		{"empty array", [0]octet{}, ""},
+		{"binary bytes", []octet{0, 128, 255}, "\x00\x80\xff"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got string
+			if err := WeakDecode(tc.input, &got); err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.want {
+				t.Fatalf("expected %q, got %q", tc.want, got)
+			}
+		})
+	}
+}
+
 func TestDecode_TypeConversion(t *testing.T) {
 	input := map[string]any{
 		"IntToFloat":         42,
