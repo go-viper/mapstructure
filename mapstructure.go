@@ -814,7 +814,7 @@ func (d *Decoder) decodeInt(name string, data any, val reflect.Value) error {
 			})
 		}
 	case dataType.PkgPath() == "encoding/json" && dataType.Name() == "Number":
-		jn := data.(json.Number)
+		jn := dataVal.Interface().(json.Number)
 		i, err := jn.Int64()
 		if err != nil {
 			return newDecodeError(name, &ParseError{
@@ -885,7 +885,7 @@ func (d *Decoder) decodeUint(name string, data any, val reflect.Value) error {
 			})
 		}
 	case dataType.PkgPath() == "encoding/json" && dataType.Name() == "Number":
-		jn := data.(json.Number)
+		jn := dataVal.Interface().(json.Number)
 		i, err := strconv.ParseUint(string(jn), 0, 64)
 		if err != nil {
 			return newDecodeError(name, &ParseError{
@@ -976,7 +976,7 @@ func (d *Decoder) decodeFloat(name string, data any, val reflect.Value) error {
 			})
 		}
 	case dataType.PkgPath() == "encoding/json" && dataType.Name() == "Number":
-		jn := data.(json.Number)
+		jn := dataVal.Interface().(json.Number)
 		i, err := jn.Float64()
 		if err != nil {
 			return newDecodeError(name, &ParseError{

@@ -409,6 +409,42 @@ func TestBasicTypes(t *testing.T) {
 	}
 }
 
+func TestDecode_JSONNumberPointer(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name    string
+		input   json.Number
+		want    any
+		wantErr bool
+	}{
+		{"int64", "-42", int64(-42), false},
+		{"uint64", "9223372036854775809", uint64(9223372036854775809), false},
+		{"float64", "42.5", float64(42.5), false},
+		{"invalid_int64", "invalid", int64(0), true},
+		{"invalid_uint64", "invalid", uint64(0), true},
+		{"invalid_float64", "invalid", float64(0), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			result := reflect.New(reflect.TypeOf(tc.want))
+			err := Decode(&tc.input, result.Interface())
+			if tc.wantErr {
+				var parseErr *ParseError
+				if !errors.As(err, &parseErr) {
+					t.Fatalf("expected ParseError, got %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := result.Elem().Interface(); !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("got %#v, want %#v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestBasic_IntWithFloat(t *testing.T) {
 	t.Parallel()
 
