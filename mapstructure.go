@@ -282,6 +282,8 @@ type DecoderConfig struct {
 	// ZeroFields, if set to true, will zero fields before writing them.
 	// For example, a map will be emptied before decoded values are put in
 	// it. If this is false, a map will be merged.
+	// When weakly converting a slice of maps, the destination is cleared once
+	// before the input maps are merged.
 	ZeroFields bool
 
 	// If WeaklyTypedInput is true, the decoder will make the following
@@ -1066,9 +1068,23 @@ func (d *Decoder) decodeMapFromSlice(name string, dataVal reflect.Value, val ref
 	}
 
 	for i := 0; i < dataVal.Len(); i++ {
+		currentVal := val
+		if d.config.ZeroFields {
+			// Decode each item separately so ZeroFields does not erase maps
+			// already merged from earlier items in the slice.
+			currentVal = reflect.New(val.Type()).Elem()
+			currentVal.Set(val)
+		}
+
 		err := d.decode(
 			name+"["+strconv.Itoa(i)+"]",
-			dataVal.Index(i).Interface(), val)
+			dataVal.Index(i).Interface(), currentVal)
+		if d.config.ZeroFields {
+			for _, key := range currentVal.MapKeys() {
+				valMap.SetMapIndex(key, currentVal.MapIndex(key))
+			}
+			val.Set(valMap)
+		}
 		if err != nil {
 			return err
 		}
