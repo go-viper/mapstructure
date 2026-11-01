@@ -786,7 +786,15 @@ func (d *Decoder) decodeInt(name string, data any, val reflect.Value) error {
 
 	switch {
 	case dataKind == reflect.Int:
-		val.SetInt(dataVal.Int())
+		i := dataVal.Int()
+		if !d.config.WeaklyTypedInput && val.OverflowInt(i) {
+			return newDecodeError(name, &ParseError{
+				Expected: val,
+				Value:    data,
+				Err:      fmt.Errorf("%d overflows %s", i, val.Type()),
+			})
+		}
+		val.SetInt(i)
 	case dataKind == reflect.Uint:
 		val.SetInt(int64(dataVal.Uint()))
 	case dataKind == reflect.Float32:
@@ -849,9 +857,24 @@ func (d *Decoder) decodeUint(name string, data any, val reflect.Value) error {
 				Err:      fmt.Errorf("%d overflows uint", i),
 			})
 		}
+		if !d.config.WeaklyTypedInput && val.OverflowUint(uint64(i)) {
+			return newDecodeError(name, &ParseError{
+				Expected: val,
+				Value:    data,
+				Err:      fmt.Errorf("%d overflows %s", i, val.Type()),
+			})
+		}
 		val.SetUint(uint64(i))
 	case dataKind == reflect.Uint:
-		val.SetUint(dataVal.Uint())
+		u := dataVal.Uint()
+		if !d.config.WeaklyTypedInput && val.OverflowUint(u) {
+			return newDecodeError(name, &ParseError{
+				Expected: val,
+				Value:    data,
+				Err:      fmt.Errorf("%d overflows %s", u, val.Type()),
+			})
+		}
+		val.SetUint(u)
 	case dataKind == reflect.Float32:
 		f := dataVal.Float()
 		if f < 0 && !d.config.WeaklyTypedInput {
