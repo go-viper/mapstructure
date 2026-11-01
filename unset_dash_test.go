@@ -11,8 +11,8 @@ func TestDecode_IgnoredFieldIsNotReportedAsUnset(t *testing.T) {
 	t.Parallel()
 
 	type target struct {
-		A string \`mapstructure:"a"\`
-		B string \`mapstructure:"-"\`
+		A string `mapstructure:"a"`
+		B string `mapstructure:"-"`
 	}
 
 	var out target
@@ -44,8 +44,8 @@ func TestDecode_RealUnsetFieldStillFails(t *testing.T) {
 	t.Parallel()
 
 	type target struct {
-		A string \`mapstructure:"a"\`
-		C string \`mapstructure:"c"\`
+		A string `mapstructure:"a"`
+		C string `mapstructure:"c"`
 	}
 
 	var out target
