@@ -1602,6 +1602,12 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 			if len(tagParts) == 0 {
 				tagParts = []string{""}
 			}
+
+			// A field tagged with "-" is explicitly ignored: it is not
+			// decoded and must not be reported as unset either.
+			if tagParts[0] == "-" {
+				continue
+			}
 			for _, tag := range tagParts[1:] {
 				if tag == d.config.SquashTagOption {
 					squash = true
