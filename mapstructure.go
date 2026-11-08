@@ -1745,7 +1745,7 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 	if d.config.ErrorUnused && len(dataValKeysUnused) > 0 {
 		keys := make([]string, 0, len(dataValKeysUnused))
 		for rawKey := range dataValKeysUnused {
-			keys = append(keys, rawKey.(string))
+			keys = append(keys, fmt.Sprint(rawKey))
 		}
 		sort.Strings(keys)
 
@@ -1781,7 +1781,7 @@ func (d *Decoder) decodeStructFromMap(name string, dataVal, val reflect.Value) e
 	// Add the unused keys to the list of unused keys if we're tracking metadata
 	if d.config.Metadata != nil {
 		for rawKey := range dataValKeysUnused {
-			key := rawKey.(string)
+			key := fmt.Sprint(rawKey)
 			if name != "" {
 				key = name + "." + key
 			}

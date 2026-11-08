@@ -1689,6 +1689,36 @@ func TestDecoder_ErrorUnused_NotSetable(t *testing.T) {
 	}
 }
 
+func TestDecoder_ErrorUnused_NonStringKey(t *testing.T) {
+	t.Parallel()
+
+	// map[any]any input (as produced by YAML decoders) may contain keys
+	// that are not strings.
+	input := map[any]any{
+		"vstring": "hello",
+		42:        "bar",
+	}
+
+	var result Basic
+	config := &DecoderConfig{
+		ErrorUnused: true,
+		Result:      &result,
+	}
+
+	decoder, err := NewDecoder(config)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	err = decoder.Decode(input)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "has invalid keys: 42") {
+		t.Fatalf("unexpected error: %s", err)
+	}
+}
+
 func TestDecoder_ErrorUnset(t *testing.T) {
 	t.Parallel()
 
@@ -2792,6 +2822,37 @@ func TestMetadata(t *testing.T) {
 	sort.Strings(md.Unset)
 	if !reflect.DeepEqual(md.Unset, expectedUnset) {
 		t.Fatalf("bad unset: %#v", md.Unset)
+	}
+}
+
+func TestMetadata_NonStringKey(t *testing.T) {
+	t.Parallel()
+
+	input := map[any]any{
+		"vstring": "foo",
+		42:        "bar",
+	}
+
+	var md Metadata
+	var result Basic
+	config := &DecoderConfig{
+		Metadata: &md,
+		Result:   &result,
+	}
+
+	decoder, err := NewDecoder(config)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	err = decoder.Decode(input)
+	if err != nil {
+		t.Fatalf("err: %s", err.Error())
+	}
+
+	expectedUnused := []string{"42"}
+	if !reflect.DeepEqual(md.Unused, expectedUnused) {
+		t.Fatalf("bad unused: %#v", md.Unused)
 	}
 }
 
