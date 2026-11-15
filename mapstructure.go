@@ -1065,16 +1065,17 @@ func (d *Decoder) decodeMapFromSlice(name string, dataVal reflect.Value, val ref
 		return nil
 	}
 
+	var errs []error
 	for i := 0; i < dataVal.Len(); i++ {
 		err := d.decode(
 			name+"["+strconv.Itoa(i)+"]",
 			dataVal.Index(i).Interface(), val)
 		if err != nil {
-			return err
+			errs = append(errs, err)
 		}
 	}
 
-	return nil
+	return errors.Join(errs...)
 }
 
 func (d *Decoder) decodeMapFromMap(name string, dataVal reflect.Value, val reflect.Value, valMap reflect.Value) error {

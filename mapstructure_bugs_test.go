@@ -1,6 +1,7 @@
 package mapstructure
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 	"time"
@@ -745,3 +746,36 @@ func TestDecodeToMapWithMultipleIndirection(t *testing.T) {
 		}
 	})
 }
+
+func TestDecodeMapFromSliceAccumulatesErrors(t *testing.T) {
+	input := []map[string]any{
+		{"foo": "not_an_int"},
+		{"bar": "also_not_an_int"},
+	}
+
+	var target map[string]int
+	err := WeakDecode(input, &target)
+	if err == nil {
+		t.Fatal("expected error decoding slice of invalid maps into map[string]int")
+	}
+
+	type multiError interface {
+		Unwrap() []error
+	}
+
+	inner := errors.Unwrap(err)
+	if inner == nil {
+		inner = err
+	}
+
+	me, ok := inner.(multiError)
+	if !ok {
+		t.Fatalf("expected multi-error (errors.Join), got %T: %v", inner, err)
+	}
+
+	errs := me.Unwrap()
+	if len(errs) != 2 {
+		t.Fatalf("expected 2 accumulated errors from decodeMapFromSlice, got %d: %v", len(errs), err)
+	}
+}
+
