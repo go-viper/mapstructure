@@ -1136,6 +1136,12 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 			continue
 		}
 
+		tagValue, _ := getTagValue(f, d.config.TagName)
+		if tagValue == "-" || strings.HasPrefix(tagValue, "-,") ||
+			(tagValue == "" && d.config.IgnoreUntaggedFields) {
+			continue
+		}
+
 		// Next get the actual value of this field and verify it is assignable
 		// to the map value.
 		v := dataVal.Field(i)
@@ -1146,12 +1152,7 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 			)
 		}
 
-		tagValue, _ := getTagValue(f, d.config.TagName)
 		keyName := d.config.MapFieldName(f.Name)
-
-		if tagValue == "" && d.config.IgnoreUntaggedFields {
-			continue
-		}
 
 		// If Squash is set in the config, we squash the field down.
 		squash := d.config.Squash && v.Kind() == reflect.Struct && f.Anonymous
@@ -1163,9 +1164,6 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 
 		// Determine the name of the key in the map
 		if index := strings.Index(tagValue, ","); index != -1 {
-			if tagValue[:index] == "-" {
-				continue
-			}
 			// If "omitempty" is specified in the tag, it ignores empty values.
 			if strings.Contains(tagValue[index+1:], "omitempty") && isEmptyValue(v) {
 				continue
@@ -1214,9 +1212,6 @@ func (d *Decoder) decodeMapFromStruct(name string, dataVal reflect.Value, val re
 				keyName = keyNameTagValue
 			}
 		} else if len(tagValue) > 0 {
-			if tagValue == "-" {
-				continue
-			}
 			keyName = tagValue
 		}
 
